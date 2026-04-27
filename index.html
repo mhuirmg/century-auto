@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <title>Century Auto — Inventory</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #080814; color: #e0e0ff; font-family: sans-serif; }
+    #root { min-height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#080814;color:#4466ff;font-family:sans-serif;font-size:18px;gap:14px;"><div style="width:24px;height:24px;border:3px solid #2979FF;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading Century Auto...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div>
+  <script type="text/babel" data-presets="react">
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+
+// ── Supabase config ─────────────────────────────────────────────────────────
+const SUPA_URL = "https://uovwaiqcuxxibihcbppx.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVvdndhaXFjdXh4aWJpaGNicHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMDEwOTAsImV4cCI6MjA5MjU3NzA5MH0.FDQyyPLwDIsfcpeqYam_1IGsQPutrBoZ6qYQ6Ex3sVI";
+const HEADERS = { "apikey": SUPA_KEY, "Authorization": `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" };
+
+// Map DB snake_case → app camelCase
+const fromDB = r => ({
+  id: r.id, vin: r.vin||"", stock: r.stock||"", year: r.year, make: r.make||"",
+  model: r.model||"", trim: r.trim||"", color: r.color||"", odometer: r.odometer||0,
+  makeReady: r.make_ready||"", type: r.type||"used", status: r.status||"available",
+  keyLocation: r.key_location||"", fileLocation: r.file_location||"",
+  detailed: r.detailed||false, keyLog: r.key_log||"", fileLog: r.file_log||"",
+  detailLog: r.detail_log||"", makeReadyLog: r.make_ready_log||"",
+  addedBy: r.added_by||"", addedAt: r.added_at||"",
+});
+// Map camelCase → DB snake_case (only updatable fields)
+const toDB = v => ({
+  vin: v.vin, stock: v.stock, year: v.year, make: v.make, model: v.model,
+  trim: v.trim, color: v.color, odometer: v.odometer, make_ready: v.makeReady,
+  type: v.type, status: v.status, key_location: v.keyLocation,
+  file_location: v.fileLocation, detailed: v.detailed, key_log: v.keyLog,
+  file_log: v.fileLog, detail_log: v.detailLog, make_ready_log: v.makeReadyLog,
+  added_by: v.addedBy, added_at: v.addedAt,
+});
+
+const supa = {
+  async get() {
+    const r = await fetch(`${SUPA_URL}/rest/v1/vehicles?order=stock.asc&limit=500`, { headers: HEADERS });
+    if (!r.ok) throw new Error(await r.text());
+    return (await r.json()).map(fromDB);
+  },
+  async insert(v) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/vehicles`, { method:"POST", headers: HEADERS, body: JSON.stringify(toDB(v)) });
+    if (!r.ok) throw new Error(await r.text());
+    return fromDB((await r.json())[0]);
+  },
+  async update(id, fields) {
+    // Convert camelCase fields to snake_case on the fly
+    const map = { keyLocation:"key_location", fileLocation:"file_location", makeReady:"make_ready",
+      keyLog:"key_log", fileLog:"file_log", detailLog:"detail_log", makeReadyLog:"make_ready_log",
+      status:"status", detailed:"detailed", make:"make", model:"model", trim:"trim",
+      color:"color", year:"year", odometer:"odometer", type:"type", vin:"vin",
+      stock:"stock", addedBy:"added_by", addedAt:"added_at" };
+    const body = {};
+    for(const [k,v] of Object.entries(fields)) body[map[k]||k] = v;
+    const r = await fetch(`${SUPA_URL}/rest/v1/vehicles?id=eq.${id}`, { method:"PATCH", headers: HEADERS, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(await r.text());
+  },
+  async delete(id) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/vehicles?id=eq.${id}`, { method:"DELETE", headers: HEADERS });
+    if (!r.ok) throw new Error(await r.text());
+  },
+  // Supabase Realtime via WebSocket
+  subscribe(onUpdate) {
+    const ws = new WebSocket(`wss://uovwaiqcuxxibihcbppx.supabase.co/realtime/v1/websocket?apikey=${SUPA_KEY}&vsn=1.0.0`);
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ topic:"realtime:public:vehicles", event:"phx_join", payload:{}, ref:"1" }));
+    };
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if(msg.event === "postgres_changes" || (msg.payload?.data)) onUpdate();
+    };
+    ws.onerror = () => {}; // silent — polling fallback handles it
+    return ws;
+  }
+};
+const MR_USED = ["", "Complete", "In Progress", "Pending"];
+const MR_NEW = ["", "Century Certified", "MVI", "MVI Only"];
+const STATUS_OPTIONS = ["available", "deposit", "in shop", "to be delivered", "sold & delivered"];
+const KEY_BOXES = ["","Wash Bay","Sales","Service","Parts","Accounting","F&I","Key Box","Customer (Test Drive)","Customer (Loaner)"];
+const FILE_LOCS = ["",
+  // Sales
+  "Josh Duguay","Will Fraser","Nathan Bryant","Benjamin Anthony",
+  "Steve Hines","Cole McLeman","Gabby Swica","Julie Lewis",
+  // F&I
+  "Stephen Thompson",
+  // Accounting
+  "Danielle MacArthur","Marjorie Hui",
+  // Management
+  "Jeremy Dube","Lauren Cooper","Dylan MacInnis",
+  "Ryan Vanoirschot","Shawn Boudreau","Buckie Bowman","Rusty Lambke","Tanya McChesney",
+  // Service
+  "Dylan Rockwell","Ashleigh Benjamin","Maddy Matthews","Brad Bowman","Arielle Cash",
+  // Parts
+  "Dave Sears","Carman MacDonald","Daniel MacDonald",
+  // Detailing
+  "Lloyd Henley","Alex Cathcart","Jayce",
+  "Other",
+];
+const STATUS_COLORS = {available:"#00897B",deposit:"#FFB300","in shop":"#7C4DFF","to be delivered":"#0097A7","sold & delivered":"#E53935"};
+const MR_COLORS = {"Century Certified":"#2979FF","MVI":"#AA00FF","MVI Only":"#FF6D00","Complete":"#00C853","In Progress":"#FFB300","Pending":"#F4511E"};
+
+const USED_DATA = [
+{vin:"KL7CJKSB4LB331867",stock:"5747B",year:2020,make:"CHEVROLET",model:"TRAX",trim:"LS",color:"BLACK",odometer:98591,makeReady:"Complete",type:"used"},
+{vin:"1GT49NEY5MF156301",stock:"5759A",year:2021,make:"GMC",model:"SIERRA 2500HD",trim:"UNKNOWN",color:"BLACK",odometer:178137,makeReady:"Complete",type:"used"},
+{vin:"5YFBPMBE2NP344950",stock:"5813A",year:2022,make:"TOYOTA",model:"COROLLA",trim:"LE",color:"",odometer:65165,makeReady:"In Progress",type:"used"},
+{vin:"1GT59ME77PF254336",stock:"5822A",year:2023,make:"GMC",model:"SIERRA 2500HD",trim:"SLE",color:"BLACK",odometer:90224,makeReady:"Complete",type:"used"},
+{vin:"KMHCT5AEXFU207617",stock:"5823A",year:2015,make:"HYUNDAI",model:"ACCENT",trim:"LE",color:"",odometer:107364,makeReady:"In Progress",type:"used"},
+{vin:"1GTP9BEK2LZ132476",stock:"5828B",year:2020,make:"GMC",model:"SIERRA 1500",trim:"SLE",color:"RED QUARTZ",odometer:140254,makeReady:"Complete",type:"used"},
+{vin:"1FTEW1EG0FKE92381",stock:"5874B",year:2015,make:"FORD",model:"F-150",trim:"BASE",color:"BLACK",odometer:138500,makeReady:"In Progress",type:"used"},
+{vin:"2FMPK4AP2LBA52157",stock:"5893A",year:2020,make:"FORD",model:"EDGE",trim:"ST",color:"",odometer:98000,makeReady:"In Progress",type:"used"},
+{vin:"1FTEW1EP1MKE14155",stock:"5900B",year:2021,make:"FORD",model:"F-150",trim:"BASE",color:"",odometer:107000,makeReady:"In Progress",type:"used"},
+{vin:"2GNAXSEVXM6128119",stock:"5919B",year:2021,make:"CHEVROLET",model:"EQUINOX",trim:"LS",color:"SILVERSTONE METALLIC",odometer:164712,makeReady:"Complete",type:"used"},
+{vin:"1GCUDEET5NZ579981",stock:"5920B",year:2022,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"",odometer:84958,makeReady:"Complete",type:"used"},
+{vin:"1FTFW3L5XRKE84956",stock:"5943B",year:2024,make:"FORD",model:"F-150",trim:"BASE",color:"WHITE",odometer:50002,makeReady:"Complete",type:"used"},
+{vin:"1GNSKCKJ3LR160357",stock:"5945B",year:2020,make:"CHEVROLET",model:"TAHOE",trim:"BASE",color:"WHITE",odometer:187871,makeReady:"Complete",type:"used"},
+{vin:"1C6SRFJT1MN704234",stock:"5950B",year:2021,make:"RAM",model:"1500",trim:"LARAMIE",color:"RED",odometer:68609,makeReady:"Complete",type:"used"},
+{vin:"5N1AT3BB4MC795047",stock:"5958A",year:2021,make:"NISSAN",model:"ROGUE",trim:"SV",color:"",odometer:94386,makeReady:"Complete",type:"used"},
+{vin:"1GCPYFED1LZ135963",stock:"5968A",year:2020,make:"CHEVROLET",model:"SILVERADO 1500",trim:"UNKNOWN",color:"BROWN",odometer:193904,makeReady:"Complete",type:"used"},
+{vin:"1FT8W3BT5LED81149",stock:"5969A",year:2020,make:"FORD",model:"SUPER DUTY F-350",trim:"LARIAT",color:"BLACK",odometer:139711,makeReady:"Complete",type:"used"},
+{vin:"1FTER4FH1PLE12551",stock:"5972A",year:2023,make:"FORD",model:"RANGER",trim:"LARIAT",color:"",odometer:97000,makeReady:"Complete",type:"used"},
+{vin:"2GTV2MEC6K1102372",stock:"5979A",year:2019,make:"GMC",model:"SIERRA 1500 LIMITED",trim:"SLE",color:"DEEP BLACK",odometer:88077,makeReady:"Complete",type:"used"},
+{vin:"3VWFM7BU6PM009474",stock:"5991A",year:2023,make:"VOLKSWAGEN",model:"JETTA",trim:"BASE",color:"",odometer:81014,makeReady:"Complete",type:"used"},
+{vin:"3GTUUGE89PG133200",stock:"6012A",year:2023,make:"GMC",model:"SIERRA 1500",trim:"DENALI",color:"TITANIUM RUSH",odometer:145004,makeReady:"Complete",type:"used"},
+{vin:"1GTP9EEL0LZ124807",stock:"6024A",year:2020,make:"GMC",model:"SIERRA 1500",trim:"AT4",color:"ONYX BLACK",odometer:155636,makeReady:"Complete",type:"used"},
+{vin:"KL77LHE20SC024778",stock:"6030A",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"SUMMIT WHITE",odometer:38187,makeReady:"Complete",type:"used"},
+{vin:"KL47LBE21RB190074",stock:"6032A",year:2024,make:"BUICK",model:"ENVISTA",trim:"SPORT TOURING",color:"MOONSTONE GREY",odometer:97223,makeReady:"Pending",type:"used"},
+{vin:"1GTU9EET7MZ300918",stock:"6048A",year:2021,make:"GMC",model:"SIERRA 1500",trim:"AT4",color:"",odometer:143546,makeReady:"Complete",type:"used"},
+{vin:"2T1BURHE1JC044095",stock:"6049A",year:2018,make:"TOYOTA",model:"COROLLA",trim:"LE",color:"",odometer:184805,makeReady:"",type:"used"},
+{vin:"2HGFC1E50HH201014",stock:"6054A",year:2017,make:"HONDA",model:"CIVIC SEDAN",trim:"SI",color:"",odometer:187002,makeReady:"Complete",type:"used"},
+{vin:"1GCPYCEF9KZ259851",stock:"6058A",year:2019,make:"CHEVROLET",model:"SILVERADO 1500",trim:"BASE",color:"",odometer:165190,makeReady:"Complete",type:"used"},
+{vin:"3TYLB5JN5ST085257",stock:"6079A",year:2025,make:"TOYOTA",model:"TACOMA",trim:"BASE",color:"",odometer:14763,makeReady:"In Progress",type:"used"},
+{vin:"2G11Z5S31K9124035",stock:"6095A",year:2019,make:"CHEVROLET",model:"IMPALA",trim:"BASE",color:"",odometer:79210,makeReady:"In Progress",type:"used"},
+{vin:"MAJ6S3GL2MC436610",stock:"6099A",year:2021,make:"FORD",model:"ECOSPORT",trim:"BASE",color:"",odometer:68002,makeReady:"Complete",type:"used"},
+{vin:"LRBFZME4XRD075067",stock:"6100A",year:2024,make:"BUICK",model:"ENVISION",trim:"PREFERRED",color:"MOONSTONE GREY",odometer:21523,makeReady:"Pending",type:"used"},
+{vin:"3GKALUEG6SL189384",stock:"6102A",year:2025,make:"GMC",model:"TERRAIN",trim:"AWD ELEVATION",color:"RIVERSTONE METALLIC",odometer:15608,makeReady:"Complete",type:"used"},
+{vin:"3GNAXUEG1PL223889",stock:"6114A",year:2023,make:"CHEVROLET",model:"EQUINOX",trim:"LT",color:"MOSAIC BLACK",odometer:88000,makeReady:"In Progress",type:"used"},
+{vin:"2GNAXSEV1N6146235",stock:"6140A",year:2022,make:"CHEVROLET",model:"EQUINOX",trim:"LS",color:"",odometer:81339,makeReady:"Complete",type:"used"},
+{vin:"KL79MRSL0PB151908",stock:"R0588",year:2023,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"MAHOGANY RED",odometer:54429,makeReady:"",type:"used"},
+{vin:"1GNEVNKW8PJ331412",stock:"R0690",year:2023,make:"CHEVROLET",model:"TRAVERSE",trim:"HIGH COUNTRY",color:"IRIDESCENT PEARL",odometer:104,makeReady:"",type:"used"},
+{vin:"5GAEVBKW3RJ116919",stock:"R0749",year:2024,make:"BUICK",model:"ENCLAVE",trim:"PREMIUM",color:"WHITE",odometer:47820,makeReady:"",type:"used"},
+{vin:"1GKKNRLS5NZ105796",stock:"R0750B",year:2022,make:"GMC",model:"ACADIA",trim:"SLE",color:"CAYENNE RED",odometer:142098,makeReady:"Complete",type:"used"},
+{vin:"1GCVKNEC0GZ202794",stock:"R0852A",year:2016,make:"CHEVROLET",model:"SILVERADO 1500",trim:"WORK TRUCK",color:"",odometer:178000,makeReady:"Complete",type:"used"},
+{vin:"3VVFB7AX3RM037709",stock:"R0946",year:2024,make:"VOLKSWAGEN",model:"TIGUAN",trim:"TRENDLINE",color:"WHITE",odometer:68138,makeReady:"Complete",type:"used"},
+{vin:"1GNS6GR82SR312450",stock:"R0948",year:2025,make:"CHEVROLET",model:"SUBURBAN",trim:"HIGH COUNTRY",color:"STERLING GREY",odometer:18537,makeReady:"",type:"used"},
+{vin:"YV4L12WL2S2146203",stock:"R0957",year:2025,make:"VOLVO",model:"V60 CROSS COUNTRY",trim:"ULTRA",color:"GREY",odometer:36797,makeReady:"Complete",type:"used"},
+{vin:"1GTR9CED3MZ214640",stock:"R0965A",year:2021,make:"GMC",model:"SIERRA 1500",trim:"BASE",color:"",odometer:50302,makeReady:"Complete",type:"used"},
+{vin:"2C4RC1GG3SR602276",stock:"R0970",year:2025,make:"CHRYSLER",model:"PACIFICA",trim:"LIMITED",color:"CERAMIC GREY",odometer:33959,makeReady:"Complete",type:"used"},
+{vin:"3GNAXPEG6SL180841",stock:"R0972",year:2025,make:"CHEVROLET",model:"EQUINOX",trim:"AWD LT",color:"SUMMIT WHITE",odometer:34017,makeReady:"Complete",type:"used"},
+{vin:"1FT7W2BT2RED88669",stock:"R0973",year:2024,make:"FORD",model:"SUPER DUTY F-250",trim:"XLT",color:"OXFORD WHITE",odometer:77134,makeReady:"Complete",type:"used"},
+{vin:"3GKALTEG8RL323798",stock:"R0974",year:2024,make:"GMC",model:"TERRAIN",trim:"SLE",color:"VOLCANIC RED",odometer:45951,makeReady:"Complete",type:"used"},
+{vin:"3GKALTEG8PL136669",stock:"R0976",year:2023,make:"GMC",model:"TERRAIN",trim:"SLE",color:"SILVERSTONE METALLIC",odometer:90275,makeReady:"In Progress",type:"used"},
+{vin:"2GCUDEED0N1509404",stock:"R0977",year:2022,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"NORTHSKY BLUE",odometer:54738,makeReady:"Complete",type:"used"},
+{vin:"3GNAXUEG7PS121969",stock:"R0978",year:2023,make:"CHEVROLET",model:"EQUINOX",trim:"UNKNOWN",color:"GREY",odometer:58004,makeReady:"Complete",type:"used"},
+{vin:"1GKS2GKD5TR161489",stock:"R0980",year:2026,make:"GMC",model:"YUKON XL",trim:"ELEVATION",color:"DOWNPOUR METALLIC",odometer:1910,makeReady:"",type:"used"},
+{vin:"4S4BTHNDXS3236100",stock:"R0981",year:2025,make:"SUBARU",model:"OUTBACK",trim:"LIMITED XT",color:"WHITE",odometer:9852,makeReady:"Complete",type:"used"},
+{vin:"3GKALTEG1RL345934",stock:"R0983",year:2024,make:"GMC",model:"TERRAIN",trim:"SLE",color:"",odometer:66243,makeReady:"Complete",type:"used"},
+{vin:"KM8HCCABXSU299452",stock:"R0984",year:2025,make:"HYUNDAI",model:"KONA",trim:"PREFERRED",color:"",odometer:46134,makeReady:"Complete",type:"used"},
+{vin:"3KMJBCDE2SE024362",stock:"R0985",year:2025,make:"HYUNDAI",model:"TUCSON",trim:"PREFERRED",color:"",odometer:29252,makeReady:"Complete",type:"used"},
+{vin:"2T3BWRFV0SW273744",stock:"R0986",year:2025,make:"TOYOTA",model:"RAV4",trim:"HYBRID LE",color:"",odometer:26639,makeReady:"Complete",type:"used"},
+{vin:"KL79MPS23RB130761",stock:"R0987",year:2024,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"MOSAIC BLACK",odometer:28128,makeReady:"",type:"used"},
+{vin:"KL4MMCSL9NB092519",stock:"R0988",year:2022,make:"BUICK",model:"ENCORE GX",trim:"PREFERRED",color:"BROWN",odometer:108323,makeReady:"In Progress",type:"used"},
+{vin:"4S3GTAG67P3718238",stock:"R0989",year:2023,make:"SUBARU",model:"IMPREZA",trim:"SPORT",color:"GREY",odometer:18750,makeReady:"",type:"used"},
+];
+
+const NEW_DATA = [
+{vin:"1GNS6TKL6TR243402",stock:"6157",year:2026,make:"CHEVROLET",model:"TAHOE",trim:"HIGH COUNTRY 4WD",color:"DARK ASH METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MNSL5TB149008",stock:"6156",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"AWD LS",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKCED1TG318301",stock:"6155",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"CUSTOM TB 4WD",color:"BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKCED4TG331088",stock:"6154",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"CUSTOM TRAIL BOSS",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1G1FZ6EV0VF100328",stock:"6153",year:2027,make:"CHEVROLET",model:"BOLT",trim:"RS",color:"HABANERO ORANGE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GTUUBED9TG257011",stock:"6152",year:2026,make:"GMC",model:"SIERRA 1500",trim:"SLE",color:"COASTAL DUNE",odometer:220,makeReady:"",type:"new"},
+{vin:"1GKS2JKL0TR308046",stock:"6151",year:2026,make:"GMC",model:"YUKON XL",trim:"DENALI 4WD",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKEE89TG221071",stock:"6150",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"STERLING GREY METALLIC",odometer:220,makeReady:"",type:"new"},
+{vin:"3GCUKCED4TG127083",stock:"6149",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"CUSTOM TRAIL BOSS",color:"BLACK",odometer:220,makeReady:"",type:"new"},
+{vin:"3GNAXSEG0TL382806",stock:"6148",year:2026,make:"CHEVROLET",model:"EQUINOX",trim:"AWD ACTIV",color:"POLAR WHITE TRICOAT",odometer:220,makeReady:"",type:"new"},
+{vin:"1GTUUAED3TZ244040",stock:"6147",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"ONYX BLACK",odometer:520,makeReady:"",type:"new"},
+{vin:"2GCUKEED1T1155797",stock:"6136",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"SUMMIT WHITE",odometer:220,makeReady:"",type:"new"},
+{vin:"3GNAXSEG4TL362574",stock:"6146",year:2026,make:"CHEVROLET",model:"EQUINOX",trim:"AWD ACTIV",color:"MOSAIC BLACK METALLIC",odometer:330,makeReady:"",type:"new"},
+{vin:"3GNKBHR4XTS160592",stock:"6137",year:2026,make:"CHEVROLET",model:"BLAZER",trim:"LT AWD",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALUEG8TL445154",stock:"6138",year:2026,make:"GMC",model:"TERRAIN",trim:"ELEVATION AWD",color:"VOLCANIC RED TINTCOAT",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALUEG1TL434240",stock:"6139",year:2026,make:"GMC",model:"TERRAIN",trim:"ELEVATION AWD",color:"STERLING METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GNAXPEG5TL431821",stock:"6144",year:2026,make:"CHEVROLET",model:"EQUINOX",trim:"AWD LT",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GN7DLRRXTS155102",stock:"6143",year:2026,make:"CHEVROLET",model:"EQUINOX EV",trim:"LT",color:"STERLING GRAY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MRSL0TB155905",stock:"6145",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"AWD LT",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUAED2TZ328429",stock:"6141",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO CREW CAB 4WD",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALUEG0TL180004",stock:"6133",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD ELEVATION",color:"STERLING METALLIC",odometer:250,makeReady:"",type:"new"},
+{vin:"1GTUUAED5TZ328215",stock:"6134",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MSSLXTB152503",stock:"6129",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"ACTIV",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MRSL5TB157052",stock:"6130",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKFE84TG306633",stock:"6128",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"LT TRAIL BOSS",color:"BLACK",odometer:114,makeReady:"",type:"new"},
+{vin:"KL79MNSL8TB154591",stock:"6132",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LS",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUGE8XTZ300027",stock:"6126",year:2026,make:"GMC",model:"SIERRA 1500",trim:"DENALI",color:"GLACIER WHITE TRICOAT",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MRSL2TB157087",stock:"6131",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUCED7TZ306292",stock:"6127",year:2026,make:"GMC",model:"SIERRA 1500",trim:"ELEVATION",color:"DOWNPOUR METALLIC",odometer:156,makeReady:"",type:"new"},
+{vin:"5GAEVARS6SJ141235",stock:"R0979",year:2025,make:"BUICK",model:"ENCLAVE",trim:"PREFERRED",color:"EBONY TWILIGHT METALLIC",odometer:107,makeReady:"",type:"new"},
+{vin:"3GCUKEE82TG280043",stock:"6125",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"BLACK",odometer:300,makeReady:"",type:"new"},
+{vin:"LRBFZPR40TD031890",stock:"6124",year:2026,make:"BUICK",model:"ENVISION",trim:"SPORT TOURING",color:"SUMMIT WHITE",odometer:400,makeReady:"",type:"new"},
+{vin:"3GKALUEGXTL440277",stock:"6123",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD ELEVATION",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"KL4AMESL2TB164656",stock:"6122",year:2026,make:"BUICK",model:"ENCORE GX",trim:"SPORT TOURING",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"KL77LHE28TC117016",stock:"6121",year:2026,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"CYPRESS GREY",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MRSLXTB156348",stock:"6120",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"KL79MRSLXTB157323",stock:"6119",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"SUMMIT WHITE",odometer:117,makeReady:"",type:"new"},
+{vin:"KL79MRSL2TB157154",stock:"6118",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"SUMMIT WHITE",odometer:114,makeReady:"",type:"new"},
+{vin:"KL79MRSL7TB157019",stock:"6117",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"LT",color:"STERLING GREY METALLIC",odometer:128,makeReady:"",type:"new"},
+{vin:"KL79MSSL9TB152542",stock:"6116",year:2026,make:"CHEVROLET",model:"TRAILBLAZER",trim:"ACTIV",color:"STERLING GREY METALLIC",odometer:144,makeReady:"",type:"new"},
+{vin:"1GT4ULEY5TF237204",stock:"6105",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"PRO",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GT4UREY9TF236656",stock:"6106",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"DENALI",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"1GCPKBEK0TZ304993",stock:"6107",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"CUSTOM",color:"BLACK",odometer:108,makeReady:"",type:"new"},
+{vin:"LRBFZMR40TD029913",stock:"6108",year:2026,make:"BUICK",model:"ENVISION",trim:"PREFERRED",color:"EBONY TWILIGHT METALLIC",odometer:114,makeReady:"",type:"new"},
+{vin:"LRBFZMR4XTD030342",stock:"6109",year:2026,make:"BUICK",model:"ENVISION",trim:"PREFERRED",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALYEG4TL417486",stock:"6090",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD AT4",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"LRBFZPR4XTD030374",stock:"6101",year:2026,make:"BUICK",model:"ENVISION",trim:"SPORT TOURING",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GNAXHEG0TL428766",stock:"6094",year:2026,make:"CHEVROLET",model:"EQUINOX",trim:"FWD LT",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"LRBFZPR44TD029916",stock:"6089",year:2026,make:"BUICK",model:"ENVISION",trim:"SPORT TOURING",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALUEG9TL408551",stock:"6084",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD ELEVATION",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALYEG1TL394605",stock:"6083",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD AT4",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTP2DEK7T1177881",stock:"6082",year:2026,make:"GMC",model:"CANYON",trim:"AT4",color:"COASTAL DUNE",odometer:100,makeReady:"",type:"new"},
+{vin:"1G1FY6EVXVF100906",stock:"6081",year:2027,make:"CHEVROLET",model:"BOLT",trim:"LT",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUAED8TZ270939",stock:"6080",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"COASTAL DUNE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GNEVJKS3TJ274665",stock:"6077",year:2026,make:"CHEVROLET",model:"TRAVERSE",trim:"Z71",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GT4UMEY2TF143626",stock:"6076",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"SLE",color:"CARDINAL RED",odometer:320,makeReady:"",type:"new"},
+{vin:"3GTUUAED3TG248881",stock:"6085",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"STERLING METALLIC",odometer:300,makeReady:"",type:"new"},
+{vin:"1G1FY6EV4VF102294",stock:"6074",year:2027,make:"CHEVROLET",model:"BOLT",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALYEG5TL420042",stock:"6073",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD AT4",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"2GCUKEED1T1165939",stock:"6067",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GNKBJR49TS149302",stock:"6066",year:2026,make:"CHEVROLET",model:"BLAZER",trim:"TRUE NORTH",color:"RADIANT RED TINTCOAT",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTP2FEK4T1181222",stock:"6068",year:2026,make:"GMC",model:"CANYON",trim:"DENALI",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKEED9TG265889",stock:"6069",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"RADIANT RED TINTCOAT",odometer:100,makeReady:"",type:"new"},
+{vin:"3GCUKEE81TG264111",stock:"6063",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"RST",color:"RADIANT RED TINTCOAT",odometer:300,makeReady:"",type:"new"},
+{vin:"1GNS6GKL7TR243951",stock:"6061",year:2026,make:"CHEVROLET",model:"SUBURBAN",trim:"HIGH COUNTRY",color:"POLAR WHITE TRICOAT",odometer:102,makeReady:"",type:"new"},
+{vin:"3GNKBJR43TS147268",stock:"6060",year:2026,make:"CHEVROLET",model:"BLAZER",trim:"TRUE NORTH",color:"STERLING GREY METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GTUUCEDXTG262188",stock:"6059",year:2026,make:"GMC",model:"SIERRA 1500",trim:"ELEVATION",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALYEG1TL379165",stock:"6057",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD AT4",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUAED6TZ271233",stock:"6056",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GNAXPEG8TL410963",stock:"6055",year:2026,make:"CHEVROLET",model:"EQUINOX",trim:"AWD LT",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GNS6GK86TR234086",stock:"6045",year:2026,make:"CHEVROLET",model:"SUBURBAN",trim:"HIGH COUNTRY",color:"DARK ASH METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GTUUCED8TG247835",stock:"6050",year:2026,make:"GMC",model:"SIERRA 1500",trim:"ELEVATION",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GKALYEG0TL399990",stock:"6046",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD AT4",color:"EBONY TWILIGHT METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GKENPKS8TJ247719",stock:"6044",year:2026,make:"GMC",model:"ACADIA",trim:"AT4",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"3GTUUFE88TG247077",stock:"6042",year:2026,make:"GMC",model:"SIERRA 1500",trim:"AT4X",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"KL77LGE21TC059776",stock:"6031",year:2026,make:"CHEVROLET",model:"TRAX",trim:"1RS",color:"MARINA BLUE METALLIC",odometer:103,makeReady:"",type:"new"},
+{vin:"1G1AW51W2K6206092",stock:"5963B",year:1989,make:"CHEVROLET",model:"CELEBRITY",trim:"BASE",color:"",odometer:162287,makeReady:"",type:"new"},
+{vin:"1GTUUAED1TZ266182",stock:"6023",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTUUAED5TZ266153",stock:"6022",year:2026,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"ONYX BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"1GNS6GKL6TR217535",stock:"6019",year:2026,make:"CHEVROLET",model:"SUBURBAN",trim:"HIGH COUNTRY",color:"LAKESHORE BLUE METALLIC",odometer:104,makeReady:"",type:"new"},
+{vin:"1GNEVLKS4TJ234123",stock:"6017",year:2026,make:"CHEVROLET",model:"TRAVERSE",trim:"RS",color:"MOSAIC BLACK METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTP2BEK8T1169745",stock:"6013",year:2026,make:"GMC",model:"CANYON",trim:"ELEVATION",color:"STERLING METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"1GTPUAEKXSZ136637",stock:"R0949",year:2025,make:"GMC",model:"SIERRA 1500",trim:"PRO",color:"SUMMIT WHITE",odometer:28871,makeReady:"",type:"new"},
+{vin:"LRBFZPE46RD036462",stock:"R0950",year:2024,make:"BUICK",model:"ENVISION",trim:"SPORT TOURING",color:"WHITE FROST TRICOAT",odometer:9124,makeReady:"",type:"new"},
+{vin:"2GCUKJED3T1102608",stock:"6010",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"HIGH COUNTRY",color:"BLACK",odometer:220,makeReady:"",type:"new"},
+{vin:"1GNS6GKLXTR191246",stock:"6007",year:2026,make:"CHEVROLET",model:"SUBURBAN",trim:"HIGH COUNTRY",color:"LAKESHORE BLUE METALLIC",odometer:107,makeReady:"",type:"new"},
+{vin:"3GKALUEG7TL368258",stock:"6006",year:2026,make:"GMC",model:"TERRAIN",trim:"AWD ELEVATION",color:"SUMMIT WHITE",odometer:105,makeReady:"",type:"new"},
+{vin:"1GKENPKS4TJ228553",stock:"6005",year:2026,make:"GMC",model:"ACADIA",trim:"AT4",color:"GLACIER WHITE TRICOAT",odometer:103,makeReady:"",type:"new"},
+{vin:"3GCPKBEK7TG237535",stock:"6004",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"CUSTOM",color:"BLACK",odometer:100,makeReady:"",type:"new"},
+{vin:"3GNKBHR44TS136773",stock:"6003",year:2026,make:"CHEVROLET",model:"BLAZER",trim:"LT",color:"BLACK",odometer:103,makeReady:"",type:"new"},
+{vin:"1GT4UREY9TF182128",stock:"5996",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"DENALI",color:"STERLING METALLIC",odometer:107,makeReady:"",type:"new"},
+{vin:"1GT4UXEYXTF183096",stock:"5998",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"DENALI ULTIMATE",color:"GLACIER WHITE TRICOAT",odometer:105,makeReady:"",type:"new"},
+{vin:"1GC4KNEY0TF183893",stock:"5997",year:2026,make:"CHEVROLET",model:"SILVERADO 2500HD",trim:"LT",color:"CYPRESS GREY",odometer:104,makeReady:"",type:"new"},
+{vin:"1GT4ULEY7TF179502",stock:"5988",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"PRO",color:"DOWNPOUR METALLIC",odometer:100,makeReady:"",type:"new"},
+{vin:"3GTUUCED2TG110146",stock:"R0963",year:2026,make:"GMC",model:"SIERRA 1500",trim:"ELEVATION",color:"TITANIUM RUSH METALLIC",odometer:108,makeReady:"",type:"new"},
+{vin:"1GT4UWEY5TF180715",stock:"5981",year:2026,make:"GMC",model:"SIERRA 3500HD",trim:"DENALI",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"1GT4UYEY9TF181670",stock:"5980",year:2026,make:"GMC",model:"SIERRA 3500HD",trim:"DENALI ULTIMATE",color:"DOWNPOUR METALLIC",odometer:106,makeReady:"",type:"new"},
+{vin:"1GTW7AF74S1256655",stock:"R0964",year:2025,make:"GMC",model:"SAVANA CARGO VAN",trim:"BASE",color:"SUMMIT WHITE",odometer:108,makeReady:"",type:"new"},
+{vin:"2GC4KMEY5T1134240",stock:"5971",year:2026,make:"CHEVROLET",model:"SILVERADO 2500HD",trim:"CUSTOM",color:"SUMMIT WHITE",odometer:103,makeReady:"",type:"new"},
+{vin:"3GNKBHRS4SS271927",stock:"5947",year:2025,make:"CHEVROLET",model:"BLAZER",trim:"LT",color:"STERLING GREY METALLIC",odometer:17,makeReady:"",type:"new"},
+{vin:"3GTUUBED6TG129227",stock:"5927",year:2026,make:"GMC",model:"SIERRA 1500",trim:"SLE",color:"TITANIUM RUSH METALLIC",odometer:104,makeReady:"",type:"new"},
+{vin:"1GT4UNEYXTF128720",stock:"5923",year:2026,make:"GMC",model:"SIERRA 2500HD",trim:"SLT",color:"SUMMIT WHITE",odometer:104,makeReady:"",type:"new"},
+{vin:"3GCUYHETXMG267644",stock:"5939A",year:2021,make:"CHEVROLET",model:"SILVERADO 1500",trim:"HIGH COUNTRY",color:"BLACK",odometer:159510,makeReady:"",type:"new"},
+{vin:"1GCPTFEK7T1126471",stock:"5916",year:2026,make:"CHEVROLET",model:"COLORADO",trim:"4WD ZR2",color:"STERLING GREY METALLIC",odometer:110,makeReady:"",type:"new"},
+{vin:"KL77LHE21TC008848",stock:"5909",year:2026,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:107,makeReady:"",type:"new"},
+{vin:"1GCPTDEK2T1111431",stock:"5908",year:2026,make:"CHEVROLET",model:"COLORADO",trim:"4WD Z71",color:"SUMMIT WHITE",odometer:112,makeReady:"",type:"new"},
+{vin:"1GNEVLKSXTJ148802",stock:"5911",year:2026,make:"CHEVROLET",model:"TRAVERSE",trim:"RS",color:"STERLING GREY METALLIC",odometer:110,makeReady:"",type:"new"},
+{vin:"KL77LHE29TC009200",stock:"5899",year:2026,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"MARINA BLUE METALLIC",odometer:104,makeReady:"",type:"new"},
+{vin:"KL77LHE27TC005792",stock:"5891",year:2026,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"SUMMIT WHITE",odometer:152,makeReady:"",type:"new"},
+{vin:"3GCUKFED6TG105457",stock:"5879",year:2026,make:"CHEVROLET",model:"SILVERADO 1500",trim:"LT TRAIL BOSS",color:"CYPRESS GREY",odometer:10684,makeReady:"",type:"new"},
+{vin:"KL77LHE23SC332821",stock:"5862",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"SUMMIT WHITE",odometer:100,makeReady:"",type:"new"},
+{vin:"KL77LHE2XSC332993",stock:"5863",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:107,makeReady:"",type:"new"},
+{vin:"1G1YC3D41S5111762",stock:"5858",year:2025,make:"CHEVROLET",model:"CORVETTE",trim:"3LT",color:"ARCTIC WHITE",odometer:106,makeReady:"",type:"new"},
+{vin:"KL77LHE26SC311994",stock:"5846",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:108,makeReady:"",type:"new"},
+{vin:"KL77LHE20SC299227",stock:"5826",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"SUMMIT WHITE",odometer:106,makeReady:"",type:"new"},
+{vin:"KL4AMCSL0TB008264",stock:"5783",year:2026,make:"BUICK",model:"ENCORE GX",trim:"PREFERRED",color:"MOONSTONE GREY METALLIC",odometer:110,makeReady:"",type:"new"},
+{vin:"KL47LAE27SB219447",stock:"5746",year:2025,make:"BUICK",model:"ENVISTA",trim:"PREFERRED",color:"EBONY TWILIGHT METALLIC",odometer:106,makeReady:"",type:"new"},
+{vin:"KL47LAE26SB219441",stock:"5744",year:2025,make:"BUICK",model:"ENVISTA",trim:"PREFERRED",color:"EBONY TWILIGHT METALLIC",odometer:108,makeReady:"",type:"new"},
+{vin:"LRBFZLE41SD003612",stock:"5732",year:2025,make:"BUICK",model:"ENVISION",trim:"SPORT TOURING",color:"BRILLIANT RED",odometer:108,makeReady:"",type:"new"},
+{vin:"KL77LHE25SC223910",stock:"5680",year:2025,make:"CHEVROLET",model:"TRAX",trim:"LT",color:"MOSAIC BLACK METALLIC",odometer:104,makeReady:"",type:"new"},
+{vin:"5GAEVARS1SJ211725",stock:"5675",year:2025,make:"BUICK",model:"ENCLAVE",trim:"PREFERRED",color:"OCEAN BLUE METALLIC",odometer:112,makeReady:"",type:"new"},
+{vin:"3GTUUCE87SG125226",stock:"R0789",year:2025,make:"GMC",model:"SIERRA 1500",trim:"ELEVATION",color:"TITANIUM RUSH METALLIC",odometer:23421,makeReady:"",type:"new"},
+{vin:"1GNSKFKT9RR337800",stock:"R0770",year:2024,make:"CHEVROLET",model:"SUBURBAN",trim:"PREMIER",color:"BLACK",odometer:24127,makeReady:"",type:"new"},
+{vin:"3GN7DSRP6SS114540",stock:"5513",year:2025,make:"CHEVROLET",model:"EQUINOX EV",trim:"RS",color:"BLACK",odometer:110,makeReady:"",type:"new"},
+];
+
+const DEFAULT_VEHICLES = [...USED_DATA, ...NEW_DATA].map((v, i) => ({
+  ...v, id: i+1, keyLocation:"", fileLocation:"", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
+  keyLog:"", fileLog:"", detailLog:"", makeReadyLog:""
+}));
+
+
+// ── Staff roster (from Excel) ──────────────────────────────────────────────
+const STAFF = [
+  {name:"Josh Duguay",     position:"Sales",                    username:"jduguay"},
+  {name:"Will Fraser",     position:"Sales",                    username:"wfraser"},
+  {name:"Nathan Bryant",   position:"Sales",                    username:"nbryant"},
+  {name:"Benjamin Anthony",position:"Sales",                    username:"banthony"},
+  {name:"Steve Hines",     position:"Sales",                    username:"shines"},
+  {name:"Cole McLeman",    position:"Sales",                    username:"cmcleman"},
+  {name:"Gabby Swica",     position:"Sales",                    username:"gswica"},
+  {name:"Julie Lewis",     position:"Sales",                    username:"jlewis"},
+  {name:"Stephen Thompson",position:"F&I",                      username:"sthompson"},
+  {name:"Danielle MacArthur",position:"Accounting",             username:"dmacarthur"},
+  {name:"Marjorie Hui",    position:"Accounting",               username:"mhui"},
+  {name:"Jeremy Dube",     position:"GM",                       username:"jdube"},
+  {name:"Lauren Cooper",   position:"Sales Manager",            username:"lcooper"},
+  {name:"Dylan MacInnis",  position:"Sales Manager",            username:"dmacinnis"},
+  {name:"Ryan Vanoirschot",position:"Service Manager",          username:"rvanoirschot"},
+  {name:"Shawn Boudreau",  position:"Parts Manager",            username:"sboudreau"},
+  {name:"Buckie Bowman",   position:"Fixed Operations Manager", username:"bbowman"},
+  {name:"Rusty Lambke",    position:"HR Manager",               username:"rlambke"},
+  {name:"Tanya McChesney", position:"Controller",               username:"tmcchesney"},
+  {name:"Dylan Rockwell",  position:"Service",                  username:"drockwell"},
+  {name:"Ashleigh Benjamin",position:"Service",                 username:"abenjamin"},
+  {name:"Maddy Matthews",  position:"Service",                  username:"mmatthews"},
+  {name:"Brad Bowman",     position:"Service",                  username:"babowman"},
+  {name:"Arielle Cash",    position:"Service",                  username:"service"},
+  {name:"Dave Sears",      position:"Parts",                    username:"dsears"},
+  {name:"Carman MacDonald",position:"Parts",                    username:"cmacdonald"},
+  {name:"Daniel MacDonald",position:"Parts",                    username:"dmacdonald"},
+  {name:"Lloyd Henley",    position:"Detailing",                username:"lhenley"},
+  {name:"Alex Cathcart",   position:"Detailing",                username:"acathcart"},
+  {name:"Jayce",           position:"Detailing",                username:"jmiddlebrook"},
+];
+
+const DEPT_ORDER = ["GM","Sales Manager","F&I","Accounting","Controller","HR Manager","Sales","Service Manager","Service","Parts Manager","Parts","Fixed Operations Manager","Detailing"];
+
+function LoginScreen({onLogin}) {
+  const [username, setUsername] = useState("");
+  const [error, setError] = useState("");
+  const [touched, setTouched] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(()=>{ if(inputRef.current) inputRef.current.focus(); },[]);
+
+  const handleLogin = () => {
+    const u = username.trim().toLowerCase();
+    const found = STAFF.find(s => s.username.toLowerCase() === u);
+    if(found){ onLogin(found); }
+    else { setError("Username not recognised. Please try again."); setTouched(true); }
+  };
+
+  const handleKey = (e) => { if(e.key==="Enter") handleLogin(); };
+
+  // Group staff by department for the quick-pick grid
+  const grouped = DEPT_ORDER.map(dept => ({
+    dept,
+    members: STAFF.filter(s => s.position === dept)
+  })).filter(g => g.members.length > 0);
+
+  return (
+    <div style={{minHeight:"100vh",background:"#080814",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Barlow',sans-serif"}}>
+      <style>{"@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap');"}</style>
+
+      {/* Logo / Title */}
+      <div style={{textAlign:"center",marginBottom:32}}>
+        <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:36,letterSpacing:4,color:"#fff",lineHeight:1}}>CENTURY AUTO GROUP</div>
+        <div style={{fontSize:11,color:"#4444aa",letterSpacing:3,fontWeight:700,marginTop:4}}>INVENTORY · KEYS · FILES · STATUS</div>
+      </div>
+
+      {/* Login card */}
+      <div style={{background:"#0e0e1e",border:"1px solid #2a2a4a",borderRadius:14,padding:"28px 28px",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
+        <div style={{fontSize:13,color:"#8888bb",marginBottom:20,textAlign:"center"}}>Sign in with your username to continue</div>
+
+        <label style={{display:"block",fontSize:10,color:"#5555aa",fontWeight:800,letterSpacing:1.2,marginBottom:6}}>USERNAME</label>
+        <input
+          ref={inputRef}
+          value={username}
+          onChange={e=>{setUsername(e.target.value);setError("");}}
+          onKeyDown={handleKey}
+          placeholder="e.g. jduguay"
+          style={{width:"100%",background:"#080814",border:`1px solid ${error?"#E53935":"#2a2a44"}`,borderRadius:8,padding:"12px 14px",color:"#e0e0ff",fontSize:16,fontFamily:"inherit",outline:"none",boxSizing:"border-box",letterSpacing:1}}
+        />
+        {error && <div style={{color:"#FF5252",fontSize:12,marginTop:6,fontWeight:600}}>⚠ {error}</div>}
+
+        <button
+          onClick={handleLogin}
+          style={{width:"100%",marginTop:16,background:"#2979FF",color:"#fff",border:"none",borderRadius:8,padding:"13px 0",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1,transition:"background 0.15s"}}
+          onMouseEnter={e=>e.target.style.background="#1a66ee"}
+          onMouseLeave={e=>e.target.style.background="#2979FF"}
+        >
+          SIGN IN →
+        </button>
+
+        <div style={{borderTop:"1px solid #1a1a2e",marginTop:22,paddingTop:16}}>
+          <div style={{fontSize:10,color:"#4444aa",fontWeight:800,letterSpacing:1,marginBottom:10,textAlign:"center"}}>OR SELECT YOUR NAME</div>
+          <div style={{maxHeight:240,overflowY:"auto",display:"flex",flexDirection:"column",gap:10}}>
+            {grouped.map(({dept,members})=>(
+              <div key={dept}>
+                <div style={{fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1.5,marginBottom:5,paddingLeft:2}}>{dept.toUpperCase()}</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  {members.map(s=>(
+                    <button key={s.username} onClick={()=>onLogin(s)}
+                      style={{background:"#141424",color:"#c0c0e0",border:"1px solid #2a2a3e",borderRadius:6,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:500,transition:"border-color 0.1s"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor="#2979FF"}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor="#2a2a3e"}
+                    >
+                      <div style={{fontWeight:700,color:"#e0e0ff",fontSize:12}}>{s.name}</div>
+                      <div style={{fontSize:9,color:"#5566aa",marginTop:1}}>{s.username}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{marginTop:16,fontSize:11,color:"#333366"}}>Century Auto Group · Internal System</div>
+    </div>
+  );
+}
+
+function useVehicles() {
+  const [vehicles, setVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const wsRef = useRef(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await supa.get();
+      setVehicles(data);
+      setError(null);
+    } catch(e) {
+      setError("Could not connect to database. Check your internet connection.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    // Realtime subscription
+    try {
+      wsRef.current = supa.subscribe(() => load());
+    } catch(e) {}
+    // Polling fallback every 15s
+    const poll = setInterval(() => load(), 15000);
+    return () => {
+      clearInterval(poll);
+      if(wsRef.current) try { wsRef.current.close(); } catch(e) {}
+    };
+  }, [load]);
+
+  return [vehicles, setVehicles, loading, error, load];
+}
+
+const Bdg = ({label,bg,small})=><span style={{background:bg,color:"#fff",borderRadius:4,padding:small?"1px 6px":"2px 8px",fontSize:small?10:11,fontWeight:700,letterSpacing:0.4,whiteSpace:"nowrap"}}>{label}</span>;
+
+function Modal({open,onClose,children}){
+  if(!open)return null;
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#12121e",border:"1px solid #2a2a4a",borderRadius:12,padding:24,width:"100%",maxWidth:580,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
+      {children}
+    </div>
+  </div>;
+}
+
+const inp={width:"100%",background:"#0a0a18",border:"1px solid #2a2a44",borderRadius:6,padding:"8px 10px",color:"#e0e0ff",fontSize:13,fontFamily:"inherit",boxSizing:"border-box"};
+const lbl={display:"block",fontSize:10,color:"#6666aa",marginBottom:3,fontWeight:800,letterSpacing:1};
+const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
+
+function VehicleForm({vehicle,onSave,onClose}){
+  const [form,setForm]=useState(vehicle||{stock:"",year:new Date().getFullYear(),make:"",model:"",trim:"",color:"",vin:"",odometer:"",keyLocation:"",fileLocation:"",detailed:false,makeReady:"",status:"available",type:"used",addedBy:"",addedAt:new Date().toISOString().slice(0,10)});
+  const set=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const mrOpts=form.type==="new"?MR_NEW:MR_USED;
+  const submit=()=>{if(!form.stock||!form.make||!form.model)return alert("Stock #, Make, Model required");onSave(form);};
+  return <div>
+    <h3 style={{margin:"0 0 18px",color:"#a0a0ff",fontSize:15,fontFamily:"inherit"}}>{vehicle?`✏️ Edit ${vehicle.stock}`:"➕ Add Vehicle"}</h3>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={g2}>
+        <div><label style={lbl}>STOCK #</label><input style={inp} value={form.stock} onChange={e=>set("stock",e.target.value)}/></div>
+        <div><label style={lbl}>TYPE</label><select style={inp} value={form.type} onChange={e=>set("type",e.target.value)}><option value="used">Used</option><option value="new">New</option></select></div>
+      </div>
+      <div style={g2}>
+        <div><label style={lbl}>YEAR</label><input style={inp} type="number" value={form.year} onChange={e=>set("year",+e.target.value)}/></div>
+        <div><label style={lbl}>STATUS</label><select style={inp} value={form.status} onChange={e=>set("status",e.target.value)}>{STATUS_OPTIONS.map(o=><option key={o} value={o}>{o.charAt(0).toUpperCase()+o.slice(1)}</option>)}</select></div>
+      </div>
+      <div style={g2}>
+        <div><label style={lbl}>MAKE</label><input style={inp} value={form.make} onChange={e=>set("make",e.target.value.toUpperCase())}/></div>
+        <div><label style={lbl}>MODEL</label><input style={inp} value={form.model} onChange={e=>set("model",e.target.value.toUpperCase())}/></div>
+      </div>
+      <div style={g2}>
+        <div><label style={lbl}>TRIM</label><input style={inp} value={form.trim||""} onChange={e=>set("trim",e.target.value.toUpperCase())}/></div>
+        <div><label style={lbl}>COLOR</label><input style={inp} value={form.color} onChange={e=>set("color",e.target.value.toUpperCase())}/></div>
+      </div>
+      <div><label style={lbl}>VIN</label><input style={inp} value={form.vin} onChange={e=>set("vin",e.target.value.toUpperCase())}/></div>
+      <div style={g2}>
+        <div><label style={lbl}>🔑 KEY LOCATION</label><select style={inp} value={form.keyLocation} onChange={e=>set("keyLocation",e.target.value)}>{KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+        <div><label style={lbl}>📁 FILE LOCATION</label><select style={inp} value={form.fileLocation} onChange={e=>set("fileLocation",e.target.value)}>{FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+      </div>
+      <div style={g2}>
+        <div><label style={lbl}>MAKE READY</label><select style={inp} value={form.makeReady} onChange={e=>set("makeReady",e.target.value)}>{mrOpts.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+        <div><label style={lbl}>🚿 DETAIL STATUS</label><select style={inp} value={form.detailed?"yes":"no"} onChange={e=>set("detailed",e.target.value==="yes")}><option value="no">✗ Not Detailed</option><option value="yes">✓ Detailed</option></select></div>
+      </div>
+      <div><label style={lbl}>ENTERED BY</label><input style={inp} value={form.addedBy} onChange={e=>set("addedBy",e.target.value)} placeholder="Your name"/></div>
+    </div>
+    <div style={{display:"flex",gap:10,marginTop:18}}>
+      <button onClick={submit} style={{flex:1,background:"#2979FF",color:"#fff",border:"none",borderRadius:6,padding:"10px 0",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>SAVE</button>
+      <button onClick={onClose} style={{flex:1,background:"#1e1e3a",color:"#8888bb",border:"none",borderRadius:6,padding:"10px 0",fontFamily:"inherit",fontSize:13,fontWeight:700,cursor:"pointer"}}>CANCEL</button>
+    </div>
+  </div>;
+}
+
+export default function App(){
+  const [vehicles,setVehicles,loading,dbError,reloadVehicles]=useVehicles();
+  const [search,setSearch]=useState("");
+  const [tab,setTab]=useState("all");
+  const [fStatus,setFStatus]=useState("all");
+  const [fDetail,setFDetail]=useState("all");
+  const [fMR,setFMR]=useState("all");
+  const [fNoKey,setFNoKey]=useState(false);
+  const [fNoFile,setFNoFile]=useState(false);
+  const [showAdd,setShowAdd]=useState(false);
+  const [editV,setEditV]=useState(null);
+  const [detailV,setDetailV]=useState(null);
+  const [view,setView]=useState("table");
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 700);
+  const [showFilters, setShowFilters] = useState(false);
+  useEffect(()=>{
+    const handler = () => setIsMobile(window.innerWidth < 700);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  },[]);
+  const [sortCol,setSortCol]=useState("stock");
+  const [sortDir,setSortDir]=useState("asc");
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("century_user_v2")); } catch { return null; }
+  });
+  const [pendingAction, setPendingAction] = useState(null);
+
+  const save=useCallback(async(form)=>{
+    try {
+      if(editV){
+        await supa.update(editV.id, {...form});
+        setVehicles(v=>v.map(x=>x.id===editV.id?{...form,id:editV.id}:x));
+        setEditV(null);
+      } else {
+        const created = await supa.insert({...form, addedBy: currentUser?.name||"", addedAt: new Date().toISOString().slice(0,10)});
+        setVehicles(v=>[...v, created]);
+      }
+      setShowAdd(false);
+    } catch(e) { alert("Save failed: " + e.message); }
+  },[editV, currentUser]);
+
+  const del=useCallback(async(id)=>{
+    if(!window.confirm("Delete this vehicle?"))return;
+    try {
+      await supa.delete(id);
+      setVehicles(v=>v.filter(x=>x.id!==id));
+      setDetailV(null);
+    } catch(e) { alert("Delete failed: " + e.message); }
+  },[]);
+
+  const stamp = (user) => {
+    const u = user || currentUser;
+    const now = new Date();
+    return `${u?.name||"?"} · ${now.toLocaleDateString('en-CA')} ${now.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'})}`;
+  };
+
+  const doAction = useCallback((action) => {
+    if (!currentUser) { setPendingAction(()=>action); return; }
+    action();
+  }, [currentUser]);
+
+  // After login, run any pending action
+  useEffect(()=>{
+    if(currentUser && pendingAction){ pendingAction(); setPendingAction(null); }
+  },[currentUser]);
+
+  const qs=useCallback((id,f,val)=>{
+    const LOG_FIELDS = {keyLocation:"keyLog", fileLocation:"fileLog", makeReady:"makeReadyLog"};
+    const logField = LOG_FIELDS[f];
+    doAction(async()=>{
+      const s = stamp();
+      const updates = {[f]:val, ...(logField?{[logField]:s}:{})};
+      setVehicles(v=>v.map(x=>x.id===id?{...x,...updates}:x));
+      setDetailV(d=>d&&d.id===id?{...d,...updates}:d);
+      try { await supa.update(id, updates); } catch(e) { alert("Update failed: "+e.message); }
+    });
+  },[doAction, currentUser]);
+
+  const togDetail=useCallback((id)=>{
+    doAction(async()=>{
+      const s = stamp();
+      const current = vehicles.find(x=>x.id===id);
+      const newVal = current ? !current.detailed : true;
+      const updates = {detailed:newVal, detailLog:s};
+      setVehicles(v=>v.map(x=>x.id===id?{...x,...updates}:x));
+      setDetailV(d=>d&&d.id===id?{...d,...updates}:d);
+      try { await supa.update(id, updates); } catch(e) { alert("Update failed: "+e.message); }
+    });
+  },[doAction, currentUser, vehicles]);
+
+  const filtered=useMemo(()=>{
+    let r=vehicles;
+    if(tab!=="all")r=r.filter(v=>v.type===tab);
+    if(fStatus!=="all")r=r.filter(v=>v.status===fStatus);
+    if(fDetail!=="all")r=r.filter(v=>fDetail==="yes"?v.detailed:!v.detailed);
+    if(fMR!=="all")r=r.filter(v=>v.makeReady===fMR);
+    if(fNoKey)r=r.filter(v=>!v.keyLocation);
+    if(fNoFile)r=r.filter(v=>!v.fileLocation);
+    const q=search.toLowerCase();
+    if(q)r=r.filter(v=>[v.stock,v.make,v.model,v.trim,v.color,v.vin,v.keyLocation,v.fileLocation].some(s=>s?.toLowerCase().includes(q)));
+    return [...r].sort((a,b)=>{
+      const av=(a[sortCol]||"").toString().toLowerCase(),bv=(b[sortCol]||"").toString().toLowerCase();
+      return sortDir==="asc"?av.localeCompare(bv,undefined,{numeric:true}):bv.localeCompare(av,undefined,{numeric:true});
+    });
+  },[vehicles,tab,fStatus,fDetail,fMR,fNoKey,fNoFile,search,sortCol,sortDir]);
+
+  const stats=useMemo(()=>({
+    total:vehicles.length,used:vehicles.filter(v=>v.type==="used").length,
+    new:vehicles.filter(v=>v.type==="new").length,
+    avail:vehicles.filter(v=>v.status==="available").length,
+    noDetail:vehicles.filter(v=>!v.detailed).length,
+    noKey:vehicles.filter(v=>!v.keyLocation).length,
+    noFile:vehicles.filter(v=>!v.fileLocation).length,
+  }),[vehicles]);
+
+  const doSort=col=>{if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");else{setSortCol(col);setSortDir("asc");}};
+  const SI=({col})=>sortCol===col?(sortDir==="asc"?"↑":"↓"):<span style={{opacity:0.15}}>↕</span>;
+
+  const pill=(active,onClick,label,cnt)=>(
+    <button onClick={onClick} style={{background:active?"#1e3a6e":"transparent",color:active?"#60a0ff":"#5555aa",border:`1px solid ${active?"#2979FF":"#1a1a2e"}`,borderRadius:20,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",letterSpacing:0.5,display:"flex",alignItems:"center",gap:4}}>
+      {label}{cnt!==undefined&&<span style={{background:active?"#2979FF":"#1a1a2e",color:"#fff",borderRadius:10,padding:"0 5px",fontSize:9,minWidth:14,textAlign:"center"}}>{cnt}</span>}
+    </button>
+  );
+
+  const TH=({col,label})=>(
+    <th onClick={()=>doSort(col)} style={{padding:"8px 8px",textAlign:"left",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1.2,whiteSpace:"nowrap",borderBottom:"1px solid #111128",cursor:"pointer",userSelect:"none"}}>
+      {label}&nbsp;<SI col={col}/>
+    </th>
+  );
+
+  const selStyle=(hasVal)=>({background:hasVal?"#0e1e2e":"#2a0a0a",border:`1px solid ${hasVal?"#1e3a5a":"#5a1a1a"}`,borderRadius:4,padding:"3px 5px",color:hasVal?"#88aaff":"#ff6666",fontSize:11,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",maxWidth:150});
+
+  const allMRopts=[...new Set([...MR_USED,...MR_NEW])].filter(Boolean);
+  const font="@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&family=Barlow:wght@400;500;600&display=swap');";
+
+  if(!currentUser) return <LoginScreen onLogin={(user)=>{setCurrentUser(user);localStorage.setItem("century_user_v2",JSON.stringify(user));}}/>
+  return <div style={{fontFamily:"'Barlow',sans-serif",background:"#080814",color:"#e0e0ff",minHeight:"100vh"}}>
+    {/* Loading / error banners */}
+    {loading && <div style={{position:"fixed",top:52,left:0,right:0,zIndex:100,background:"#1a1a2e",borderBottom:"1px solid #2a2a4a",padding:"8px 20px",display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:14,height:14,border:"2px solid #2979FF",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+      <span style={{fontSize:12,color:"#8888bb"}}>Loading inventory from database...</span>
+    </div>}
+    {dbError && <div style={{position:"fixed",top:52,left:0,right:0,zIndex:100,background:"#2a0808",borderBottom:"1px solid #5a1a1a",padding:"8px 20px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+      <span style={{fontSize:12,color:"#ff8888"}}>⚠ {dbError}</span>
+      <button onClick={reloadVehicles} style={{background:"#FF5252",color:"#fff",border:"none",borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>RETRY</button>
+    </div>}
+    <style>{font}</style>
+    <style>{`*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:#0a0a16}::-webkit-scrollbar-thumb{background:#222244;border-radius:3px}tbody tr:hover td{background:#0d0d20!important}select option{background:#12121e}@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}input,select,button{font-size:16px!important;} @media(min-width:600px){input,select,button{font-size:inherit!important}}`}</style>
+
+    {/* HEADER */}
+    <div style={{background:"#0a0a16",borderBottom:"1px solid #1a1a2e",position:"sticky",top:0,zIndex:50}}>
+      <div style={{maxWidth:1700,margin:"0 auto",padding:"0 14px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isMobile?18:22,letterSpacing:2,color:"#fff",lineHeight:1,whiteSpace:"nowrap"}}>CENTURY AUTO</div>
+          {!loading&&!dbError&&<div title="Live sync active" style={{width:7,height:7,borderRadius:"50%",background:"#00C853",boxShadow:"0 0 6px #00C853",flexShrink:0}}/>}
+          {!isMobile&&<><div style={{width:1,height:22,background:"#2a2a4a"}}/>
+          <div style={{fontSize:9,color:"#4444aa",letterSpacing:2,fontWeight:800}}>INVENTORY · KEYS · FILES</div></>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"#1a1a2e",border:"1px solid #2a2a4a",borderRadius:6,padding:"5px 10px"}}>
+                <span style={{fontSize:14}}>👤</span>
+                <div>
+                  <div style={{fontSize:isMobile?10:11,color:"#a0a0ff",fontWeight:700,maxWidth:isMobile?70:150,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{currentUser?.name}</div>
+                  {!isMobile&&<div style={{fontSize:9,color:"#4455aa",fontWeight:600,letterSpacing:0.5}}>{currentUser?.position}</div>}
+                </div>
+                <button onClick={()=>{setCurrentUser(null);localStorage.removeItem("century_user_v2");}} title="Sign out" style={{background:"transparent",border:"none",color:"#5555aa",cursor:"pointer",fontSize:12,padding:0,lineHeight:1}}>✕</button>
+              </div>
+          <button onClick={()=>{setEditV(null);setShowAdd(true);}} style={{background:"#1e3a6e",color:"#60a0ff",border:"1px solid #2979FF",borderRadius:6,padding:"7px 14px",fontFamily:"inherit",fontSize:12,fontWeight:700,cursor:"pointer",letterSpacing:0.5,whiteSpace:"nowrap"}}>＋ {isMobile?"Add":"Add Vehicle"}</button>
+        </div>
+      </div>
+    </div>
+
+    <div style={{maxWidth:1700,margin:"0 auto",padding:isMobile?"10px 10px":"12px 20px"}}>
+
+      {/* STATS */}
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)",gap:isMobile?6:8,marginBottom:isMobile?10:12}}>
+        {[
+          {l:"TOTAL",v:stats.total,c:"#4488ff"},{l:"USED",v:stats.used,c:"#00897B"},{l:"NEW",v:stats.new,c:"#7C4DFF"},
+          {l:"AVAIL",v:stats.avail,c:"#00BFA5"},{l:"DETAIL",v:stats.noDetail,c:"#FF6D00"},
+          {l:"NO KEY",v:stats.noKey,c:"#E53935"},{l:"NO FILE",v:stats.noFile,c:"#E53935"},
+        ].map(s=><div key={s.l} style={{background:"#0a0a16",border:`1px solid ${s.c}22`,borderRadius:8,padding:isMobile?"7px 8px":"9px 12px",borderLeft:`3px solid ${s.c}`}}>
+          <div style={{fontSize:isMobile?8:9,color:"#4444aa",fontWeight:800,letterSpacing:0.8}}>{s.l}</div>
+          <div style={{fontSize:isMobile?20:24,fontFamily:"'Bebas Neue',sans-serif",color:s.c,lineHeight:1.1}}>{s.v}</div>
+        </div>)}
+      </div>
+
+      {/* CONTROLS */}
+      <div style={{background:"#0a0a16",border:"1px solid #1a1a2e",borderRadius:10,padding:isMobile?"8px 10px":"10px 14px",marginBottom:10}}>
+        {/* Search row — always visible */}
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:isMobile&&!showFilters?0:8}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search stock, VIN, make, model..." style={{flex:1,background:"#060610",border:"1px solid #1a1a2a",borderRadius:6,padding:"9px 12px",color:"#e0e0ff",fontFamily:"inherit"}}/>
+          {isMobile&&<button onClick={()=>setShowFilters(f=>!f)} style={{background:showFilters?"#1e3a6e":"#0e0e1e",color:showFilters?"#60a0ff":"#6666aa",border:"1px solid #1a1a2e",borderRadius:6,padding:"9px 12px",fontFamily:"inherit",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontSize:12}}>
+            {showFilters?"▲ Filters":"▼ Filters"}{(fStatus!=="all"||fDetail!=="all"||fMR!=="all"||fNoKey||fNoFile)&&<span style={{background:"#E53935",color:"#fff",borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:4}}> </span>}
+          </button>}
+          {!isMobile&&<div style={{display:"flex",gap:3}}>
+            {["table","cards"].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?"#1e1e3a":"transparent",color:view===v?"#e0e0ff":"#5555aa",border:"1px solid #1a1a2e",borderRadius:5,padding:"7px 10px",cursor:"pointer",fontSize:14}}>
+              {v==="table"?"☰":"⊞"}
+            </button>)}
+          </div>}
+        </div>
+        {/* Expanded filters */}
+        {(!isMobile||showFilters)&&<div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
+            <div style={{display:"flex",gap:3,background:"#060610",borderRadius:8,padding:3}}>
+              {[["all","All"],["used","Used"],["new","New"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setTab(v)} style={{background:tab===v?"#1e3a6e":"transparent",color:tab===v?"#60a0ff":"#5555aa",border:"none",borderRadius:6,padding:isMobile?"6px 14px":"4px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+              ))}
+            </div>
+            {!isMobile&&<div style={{width:1,height:22,background:"#1a1a2e"}}/>}
+            {STATUS_OPTIONS.map(s=>pill(fStatus===s,()=>setFStatus(fStatus===s?"all":s), s==="in shop"?"In Shop":s==="to be delivered"?"To Deliver":s==="sold & delivered"?"Sold":s.charAt(0).toUpperCase()+s.slice(1)))}
+          </div>
+          <div style={{display:"flex",gap:isMobile?8:8,flexWrap:"wrap",alignItems:"center"}}>
+            {pill(fDetail==="no",()=>setFDetail(fDetail==="no"?"all":"no"),"Needs Detail",stats.noDetail)}
+            {pill(fDetail==="yes",()=>setFDetail(fDetail==="yes"?"all":"yes"),"Detailed")}
+            <select value={fMR} onChange={e=>setFMR(e.target.value)} style={{background:"#060610",border:"1px solid #1a1a2a",borderRadius:6,padding:"6px 10px",color:"#e0e0ff",fontFamily:"inherit"}}>
+              <option value="all">All Make Ready</option>
+              {allMRopts.map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+            <label style={{color:fNoKey?"#ff6655":"#6666aa",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:700,userSelect:"none",padding:"6px 0"}}>
+              <input type="checkbox" checked={fNoKey} onChange={e=>setFNoKey(e.target.checked)} style={{accentColor:"#FF5252",width:16,height:16}}/>🔑 No Key
+            </label>
+            <label style={{color:fNoFile?"#ff6655":"#6666aa",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:700,userSelect:"none",padding:"6px 0"}}>
+              <input type="checkbox" checked={fNoFile} onChange={e=>setFNoFile(e.target.checked)} style={{accentColor:"#FF5252",width:16,height:16}}/>📁 No File
+            </label>
+          </div>
+        </div>}
+      </div>
+
+      <div style={{fontSize:10,color:"#333388",marginBottom:8,fontWeight:700}}>SHOWING {filtered.length} OF {vehicles.length} VEHICLES</div>
+
+      {/* TABLE */}
+      {view==="table"&&!isMobile&&<div style={{background:"#0a0a16",border:"1px solid #1a1a2e",borderRadius:10,overflow:"hidden",animation:"fadeIn 0.15s ease"}}>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"'Barlow',sans-serif"}}>
+            <thead style={{background:"#060610"}}>
+              <tr>
+                <TH col="stock" label="STOCK #"/>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128"}}>T</th>
+                <TH col="year" label="YR"/>
+                <TH col="make" label="MAKE"/>
+                <TH col="model" label="MODEL"/>
+                <TH col="trim" label="TRIM"/>
+                <TH col="color" label="COLOR"/>
+                <TH col="keyLocation" label="🔑 KEY LOCATION"/>
+                <TH col="fileLocation" label="📁 FILE LOCATION"/>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128",whiteSpace:"nowrap"}}>🚿 DETAIL</th>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128",whiteSpace:"nowrap"}}>✅ MAKE READY</th>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128"}}>STATUS</th>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128"}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length===0&&<tr><td colSpan={13} style={{textAlign:"center",padding:40,color:"#333388",fontSize:13}}>No vehicles found</td></tr>}
+              {filtered.map(v=><tr key={v.id} style={{borderBottom:"1px solid #0e0e1c",cursor:"pointer"}}>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#6677ee",fontWeight:500,whiteSpace:"nowrap"}}>{v.stock}</td>
+                <td style={{padding:"7px 5px"}}><Bdg label={v.type==="new"?"N":"U"} bg={v.type==="new"?"#1a2060":"#0a3020"} small/></td>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 5px",fontSize:12,color:"#7777aa"}}>{v.year}</td>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:12,fontWeight:600,color:"#c0c0e0",whiteSpace:"nowrap"}}>{v.make}</td>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:12,color:"#e0e0ff",whiteSpace:"nowrap"}}>{v.model}</td>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#8888bb",whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{v.trim}</td>
+                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#9090cc",whiteSpace:"nowrap"}}>{v.color||"—"}</td>
+                <td style={{padding:"4px 6px"}}>
+                  <select value={v.keyLocation} onChange={e=>qs(v.id,"keyLocation",e.target.value)} style={selStyle(!!v.keyLocation)}>
+                    {KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
+                  </select>
+                  {v.keyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.keyLog}>↳ {v.keyLog}</div>}
+                </td>
+                <td style={{padding:"4px 6px"}}>
+                  <select value={v.fileLocation} onChange={e=>qs(v.id,"fileLocation",e.target.value)} style={selStyle(!!v.fileLocation)}>
+                    {FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
+                  </select>
+                  {v.fileLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.fileLog}>↳ {v.fileLog}</div>}
+                </td>
+                <td style={{padding:"4px 6px"}}>
+                  <button onClick={()=>togDetail(v.id)} style={{background:"transparent",border:"none",cursor:"pointer",padding:0}}>
+                    <Bdg label={v.detailed?"✓ Done":"✗ Needed"} bg={v.detailed?"#0a2a0a":"#2a0a08"} small/>
+                  </button>
+                  {v.detailLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}} title={v.detailLog}>↳ {v.detailLog}</div>}
+                </td>
+                <td style={{padding:"4px 6px"}}>
+                  <select value={v.makeReady} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+                    {(v.type==="new"?MR_NEW:MR_USED).map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
+                  </select>
+                  {v.makeReadyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}} title={v.makeReadyLog}>↳ {v.makeReadyLog}</div>}
+                </td>
+                <td style={{padding:"5px 6px"}}>
+                  <select value={v.status} onChange={e=>qs(v.id,"status",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+                    {STATUS_OPTIONS.map(o=><option key={o} value={o}>{o.charAt(0).toUpperCase()+o.slice(1)}</option>)}
+                  </select>
+                </td>
+                <td style={{padding:"5px 6px"}}>
+                  <div style={{display:"flex",gap:4}}>
+                    <button onClick={()=>{setEditV(v);setShowAdd(true);}} style={{background:"#0e1a3a",color:"#4488ff",border:"none",borderRadius:4,padding:"3px 7px",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>EDIT</button>
+                    <button onClick={()=>del(v.id)} style={{background:"#2a0808",color:"#ff5555",border:"none",borderRadius:4,padding:"3px 7px",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>DEL</button>
+                  </div>
+                </td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>}
+
+      {/* CARDS / MOBILE LIST */}
+      {(view==="cards"||isMobile)&&<div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:isMobile?8:10,animation:"fadeIn 0.15s ease"}}>
+        {filtered.length===0&&<div style={{gridColumn:"1/-1",textAlign:"center",padding:40,color:"#333388"}}>No vehicles found</div>}
+        {filtered.map(v=>(
+          <div key={v.id} style={{background:"#0a0a16",border:"1px solid #1a1a2e",borderRadius:10,overflow:"hidden",position:"relative"}}>
+            <div style={{height:3,background:STATUS_COLORS[v.status]||"#333"}}/>
+            {/* Tappable header */}
+            <div onClick={()=>setDetailV(v)} style={{padding:"10px 13px 8px",cursor:"pointer"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{minWidth:0}}>
+                  <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#5566dd"}}>#{v.stock}</div>
+                  <div style={{fontSize:isMobile?15:14,fontWeight:700,color:"#fff",lineHeight:1.3,marginTop:1}}>{v.year} {v.make} {v.model}</div>
+                  <div style={{fontSize:11,color:"#8888bb",marginTop:1}}>{v.trim}{v.color&&` · ${v.color}`}</div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0,marginLeft:8}}>
+                  <Bdg label={v.type==="new"?"NEW":"USED"} bg={v.type==="new"?"#1a2060":"#0a3020"} small/>
+                  <Bdg label={v.status==="in shop"?"In Shop":v.status==="to be delivered"?"To Deliver":v.status==="sold & delivered"?"Sold✓":v.status.charAt(0).toUpperCase()+v.status.slice(1)} bg={STATUS_COLORS[v.status]||"#333"} small/>
+                </div>
+              </div>
+              {/* Key + File */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
+                {[["🔑",v.keyLocation,v.keyLog],["📁",v.fileLocation,v.fileLog]].map(([icon,val,log])=>(
+                  <div key={icon} style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
+                    <div style={{fontSize:isMobile?11:10,color:val?"#7799ff":"#ff6655",fontWeight:600}}>{icon} {val||"NOT SET"}</div>
+                    {log&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {log}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Quick-action row — big touch targets on mobile */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",borderTop:"1px solid #111128"}}>
+              <button onClick={()=>togDetail(v.id)} style={{background:"transparent",border:"none",borderRight:"1px solid #111128",padding:isMobile?"11px 4px":"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <span style={{fontSize:isMobile?14:12}}>{v.detailed?"✅":"🔲"}</span>
+                <span style={{fontSize:8,color:v.detailed?"#00CC55":"#FF5555",fontWeight:700}}>{v.detailed?"DONE":"DETAIL"}</span>
+                {v.detailLog&&<span style={{fontSize:7,color:"#3344aa",maxWidth:70,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳{v.detailLog.split("·")[0]}</span>}
+              </button>
+              <div style={{borderRight:"1px solid #111128",padding:isMobile?"6px 4px":"4px 4px",display:"flex",flexDirection:"column",gap:2,alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:8,color:"#3333aa",fontWeight:800}}>READY</span>
+                <select value={v.makeReady} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"transparent",border:"none",color:"#e0e0ff",fontSize:9,fontFamily:"inherit",cursor:"pointer",maxWidth:72,textAlign:"center"}}>
+                  {(v.type==="new"?MR_NEW:MR_USED).map(o=><option key={o} value={o}>{o||"—"}</option>)}
+                </select>
+              </div>
+              <div style={{borderRight:"1px solid #111128",padding:isMobile?"6px 4px":"4px 4px",display:"flex",flexDirection:"column",gap:2,alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontSize:8,color:"#3333aa",fontWeight:800}}>STATUS</span>
+                <select value={v.status} onChange={e=>qs(v.id,"status",e.target.value)} style={{background:"transparent",border:"none",color:"#e0e0ff",fontSize:9,fontFamily:"inherit",cursor:"pointer",maxWidth:72,textAlign:"center"}}>
+                  {STATUS_OPTIONS.map(o=><option key={o} value={o}>{o==="in shop"?"In Shop":o==="to be delivered"?"Deliver":o==="sold & delivered"?"Sold✓":o.charAt(0).toUpperCase()+o.slice(1)}</option>)}
+                </select>
+              </div>
+              <button onClick={()=>setDetailV(v)} style={{background:"transparent",border:"none",padding:isMobile?"11px 4px":"7px 4px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                <span style={{fontSize:isMobile?14:12}}>📋</span>
+                <span style={{fontSize:8,color:"#4488ff",fontWeight:700}}>DETAIL</span>
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>}
+    </div>
+
+
+        <Modal open={showAdd} onClose={()=>{setShowAdd(false);setEditV(null);}}>
+      <VehicleForm vehicle={editV} onSave={save} onClose={()=>{setShowAdd(false);setEditV(null);}}/>
+    </Modal>
+
+    <Modal open={!!detailV&&!showAdd} onClose={()=>setDetailV(null)}>
+      {detailV&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+          <div>
+            <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:"#5566dd",marginBottom:2}}>STOCK #{detailV.stock} · {detailV.type==="new"?"NEW":"USED"}</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:"#fff",letterSpacing:1}}>{detailV.year} {detailV.make} {detailV.model}</div>
+            <div style={{fontSize:11,color:"#8888bb"}}>{detailV.trim}{detailV.color&&` · ${detailV.color}`}</div>
+          </div>
+          <Bdg label={detailV.status==="in shop"?"In Shop":detailV.status.charAt(0).toUpperCase()+detailV.status.slice(1)} bg={STATUS_COLORS[detailV.status]||"#333"}/>
+        </div>
+        {[
+          ["VIN",detailV.vin||"—","mono"],
+          ["Odometer",detailV.odometer?`${Number(detailV.odometer).toLocaleString()} km`:"—"],
+        ].map(([k,val,mono])=><div key={k} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid #141424",padding:"7px 0",alignItems:"center"}}>
+          <span style={{color:"#444488",fontSize:11,fontWeight:700,letterSpacing:0.5}}>{k}</span>
+          <span style={{color:"#e0e0ff",fontSize:12,fontFamily:mono?"'JetBrains Mono',monospace":"inherit"}}>{val}</span>
+        </div>)}
+        {/* Tracked fields with log */}
+        {[
+          {label:"🔑 Key Location", val:detailV.keyLocation||"NOT SET", log:detailV.keyLog, notSet:!detailV.keyLocation},
+          {label:"📁 File Location", val:detailV.fileLocation||"NOT SET", log:detailV.fileLog, notSet:!detailV.fileLocation},
+          {label:"🚿 Detail Status", val:detailV.detailed?"✓ Detailed":"✗ Not Detailed", log:detailV.detailLog, notSet:false},
+          {label:"✅ Make Ready", val:detailV.makeReady||"Not Set", log:detailV.makeReadyLog, notSet:!detailV.makeReady},
+        ].map(({label,val,log,notSet})=><div key={label} style={{borderBottom:"1px solid #141424",padding:"7px 0"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{color:"#444488",fontSize:11,fontWeight:700,letterSpacing:0.5}}>{label}</span>
+            <span style={{color:notSet?"#ff6655":"#e0e0ff",fontSize:12}}>{val}</span>
+          </div>
+          {log&&<div style={{fontSize:10,color:"#4455aa",marginTop:2,textAlign:"right"}}>↳ Last changed by {log}</div>}
+        </div>)}
+        {[
+          ["Entered By",detailV.addedBy||"—"],
+          ["Date Added",detailV.addedAt||"—"],
+        ].map(([k,val])=><div key={k} style={{display:"flex",justifyContent:"space-between",borderBottom:"1px solid #141424",padding:"7px 0",alignItems:"center"}}>
+          <span style={{color:"#444488",fontSize:11,fontWeight:700,letterSpacing:0.5}}>{k}</span>
+          <span style={{color:"#e0e0ff",fontSize:12}}>{val}</span>
+        </div>)}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:14}}>
+          <button onClick={()=>togDetail(detailV.id)} style={{background:detailV.detailed?"#0a2a0a":"#2a0a08",color:detailV.detailed?"#00CC55":"#FF5555",border:`1px solid ${detailV.detailed?"#00CC55":"#FF5555"}`,borderRadius:6,padding:"8px 4px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+            {detailV.detailed?"✓ DETAILED":"MARK DETAILED"}
+          </button>
+          <button onClick={()=>{setEditV(detailV);setShowAdd(true);}} style={{background:"#0a1a3a",color:"#4488ff",border:"1px solid #4488ff",borderRadius:6,padding:"8px 4px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>EDIT</button>
+          <button onClick={()=>del(detailV.id)} style={{background:"#2a0808",color:"#FF5555",border:"1px solid #FF5555",borderRadius:6,padding:"8px 4px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>DELETE</button>
+        </div>
+        <button onClick={()=>setDetailV(null)} style={{width:"100%",marginTop:8,background:"#1a1a2e",color:"#8888bb",border:"none",borderRadius:6,padding:"8px 0",fontFamily:"inherit",fontSize:11,fontWeight:700,cursor:"pointer"}}>CLOSE</button>
+      </div>}
+    </Modal>
+  </div>;
+}
+
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<App />);
+  </script>
+</body>
+</html>
