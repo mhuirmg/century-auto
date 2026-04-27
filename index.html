@@ -9,7 +9,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #080814; color: #e0e0ff; font-family: sans-serif; }
@@ -18,7 +18,7 @@
 </head>
 <body>
   <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#080814;color:#4466ff;font-family:sans-serif;font-size:18px;gap:14px;"><div style="width:24px;height:24px;border:3px solid #2979FF;border-top-color:transparent;border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading Century Auto...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style></div>
-  <script type="text/babel">
+  <script type="text/babel" data-type="module">
 const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 // ── Supabase config ─────────────────────────────────────────────────────────
@@ -939,7 +939,8 @@ function App(){
   </div>;
 }
 
-  ReactDOM.render(React.createElement(App), document.getElementById('root'));
+  const domRoot = ReactDOM.createRoot(document.getElementById('root'));
+  domRoot.render(React.createElement(App));
   </script>
 </body>
 </html>
