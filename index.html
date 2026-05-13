@@ -311,44 +311,46 @@ const DEFAULT_VEHICLES = [...USED_DATA, ...NEW_DATA].map((v, i) => ({
 
 // ── Staff roster (from Excel) ──────────────────────────────────────────────
 const STAFF = [
-  {name:"Josh Duguay",     position:"Sales",                    username:"jduguay"},
-  {name:"Will Fraser",     position:"Sales",                    username:"wfraser"},
-  {name:"Nathan Bryant",   position:"Sales",                    username:"nbryant"},
-  {name:"Benjamin Anthony",position:"Sales",                    username:"banthony"},
-  {name:"Steve Hines",     position:"Sales",                    username:"shines"},
-  {name:"Cole McLeman",    position:"Sales",                    username:"cmcleman"},
-  {name:"Gabby Swica",     position:"Sales",                    username:"gswica"},
-  {name:"Julie Lewis",     position:"Sales",                    username:"jlewis"},
-  {name:"Stephen Thompson",position:"F&I",                      username:"sthompson"},
-  {name:"Danielle MacArthur",position:"Accounting",             username:"dmacarthur"},
-  {name:"Marjorie Hui",    position:"Accounting",               username:"mhui"},
-  {name:"Jeremy Dube",     position:"GM",                       username:"jdube"},
-  {name:"Lauren Cooper",   position:"Sales Manager",            username:"lcooper"},
-  {name:"Dylan MacInnis",  position:"Sales Manager",            username:"dmacinnis"},
-  {name:"Ryan Vanoirschot",position:"Service Manager",          username:"rvanoirschot"},
-  {name:"Shawn Boudreau",  position:"Parts Manager",            username:"sboudreau"},
-  {name:"Buckie Bowman",   position:"Fixed Operations Manager", username:"bbowman"},
-  {name:"Rusty Lambke",    position:"HR Manager",               username:"rlambke"},
-  {name:"Tanya McChesney", position:"Controller",               username:"tmcchesney"},
-  {name:"Dylan Rockwell",  position:"Service",                  username:"drockwell"},
-  {name:"Ashleigh Benjamin",position:"Service",                 username:"abenjamin"},
-  {name:"Maddy Matthews",  position:"Service",                  username:"mmatthews"},
-  {name:"Brad Bowman",     position:"Service",                  username:"babowman"},
-  {name:"Arielle Cash",    position:"Service",                  username:"service"},
-  {name:"Dave Sears",      position:"Parts",                    username:"dsears"},
-  {name:"Carman MacDonald",position:"Parts",                    username:"cmacdonald"},
-  {name:"Daniel MacDonald",position:"Parts",                    username:"dmacdonald"},
-  {name:"Lloyd Henley",    position:"Detailing",                username:"lhenley"},
-  {name:"Alex Cathcart",   position:"Detailing",                username:"acathcart"},
-  {name:"Jayce",           position:"Detailing",                username:"jmiddlebrook"},
+  {name:"Josh Duguay",username:"jduguay",position:"Sales",password:'$-#2kfku4aXV5MsA'},
+  {name:"Will Fraser",username:"wfraser",position:"Sales",password:'C%?cvMwkH3p*hguE'},
+  {name:"Nathan Bryant",username:"nbryant",position:"Sales",password:'tZP5#qggPZi7gnCj'},
+  {name:"Benjamin Anthony",username:"banthony",position:"Sales",password:'U3K9!F2jsei3862v'},
+  {name:"Steve Hines",username:"shines",position:"Sales",password:'JiZPci$8Jd5E28G&'},
+  {name:"Cole McLeman",username:"cmcleman",position:"Sales",password:'&G&b79#^7ufRE7m8'},
+  {name:"Gabby Swica",username:"gswica",position:"Sales",password:'Mk4dhaD8G64Vxu*4'},
+  {name:"Julie Lewis",username:"jlewis",position:"Sales",password:'ms-QT6a9p@VGLxh$'},
+  {name:"Stephen Thompson",username:"sthompson",position:"F&I",password:'t3-HBZpdcYQV-W$x'},
+  {name:"Danielle MacArthur",username:"dmacarthur",position:"Accounting",password:'@QFj=A=*8XJmC?d^'},
+  {name:"Marjorie Hui",username:"mhui",position:"Accounting",password:'zC^ny8t!FD?quwi@'},
+  {name:"Jeremy Dube",username:"jdube",position:"GM",password:'6MX=77HPfxQ7nZ6f'},
+  {name:"Lauren Cooper",username:"lcooper",position:"Sales Manager",password:'3*jnZ5sJ4ht?n+gr'},
+  {name:"Dylan MacInnis",username:"dmacinnis",position:"Sales Manager",password:'3mVf$vM#Xjb%gNaj'},
+  {name:"Ryan Vanoirschot",username:"rvanoirschot",position:"Service Manager",password:'*Tj4*NA@X$dKA7Hu'},
+  {name:"Shawn Boudreau",username:"sboudreau",position:"Parts Manager",password:'Sxd&E9q68SE-3Kn7'},
+  {name:"Buckie Bowman",username:"bbowman",position:"Fixed Operation Manager",password:'Xd*t3GM+k$GGC?@@'},
+  {name:"Rusty Lambke",username:"rlambke",position:"HR Manager",password:'ZQWup7H5v&fDKk49'},
+  {name:"Tanya McChesney",username:"tmcchesney",position:"Controller",password:'BXv7-&a+p9zjd*GD'},
+  {name:"Gage Burke",username:"gburke",position:"Group Controller",password:'7q9RSRV5z?usfB6Y'},
+  {name:"Dylan Rockwell",username:"drockwell",position:"Service",password:'t&wM9qWex^vE@8cw'},
+  {name:"Ashleigh Benjamin",username:"abenjamin",position:"Service",password:'##At%XZBKS5GnfY7'},
+  {name:"Maddy Matthews",username:"mmatthews",position:"Service",password:'3qnpk?+H86@Fj9Y2'},
+  {name:"Brad Bowman",username:"babowman",position:"Service",password:'+9c7bMjFh$3RpvVD'},
+  {name:"Arielle Cash",username:"service",position:"Service",password:'632DNisx@jMWZiUK'},
+  {name:"Dave Sears",username:"dsears",position:"Parts",password:'fCnJJrp3-XLwCyZz'},
+  {name:"Carman MacDonald",username:"cmacdonald",position:"Parts",password:'U6GK!628deB64Duh'},
+  {name:"Daniel MacDonald",username:"dmacdonald",position:"Parts",password:'y5Ah&+s?8ZLTYrTj'},
+  {name:"Lloyd Henley",username:"lhenley",position:"Detailing",password:'#Vw=6F@PQFwFGRfc'},
+  {name:"Alex Cathcart",username:"acathcart",position:"Detailing",password:'*-8ns&BiQm79fCC4'},
+  {name:"Jayce",username:"jmiddlebrook",position:"Detailing",password:'YrQ2?Ye8gFTAzXtM'},
 ];
 
 const DEPT_ORDER = ["GM","Sales Manager","F&I","Accounting","Controller","HR Manager","Sales","Service Manager","Service","Parts Manager","Parts","Fixed Operations Manager","Detailing"];
 
 function LoginScreen({onLogin}) {
   const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [touched, setTouched] = useState(false);
+  const [showPw, setShowPw] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(()=>{ if(inputRef.current) inputRef.current.focus(); },[]);
@@ -356,17 +358,12 @@ function LoginScreen({onLogin}) {
   const handleLogin = () => {
     const u = username.trim().toLowerCase();
     const found = STAFF.find(s => s.username.toLowerCase() === u);
-    if(found){ onLogin(found); }
-    else { setError("Username not recognised. Please try again."); setTouched(true); }
+    if(!found){ setError("Username not recognised. Please try again."); return; }
+    if(found.password !== password){ setError("Incorrect password. Please try again."); return; }
+    onLogin(found);
   };
 
   const handleKey = (e) => { if(e.key==="Enter") handleLogin(); };
-
-  // Group staff by department for the quick-pick grid
-  const grouped = DEPT_ORDER.map(dept => ({
-    dept,
-    members: STAFF.filter(s => s.position === dept)
-  })).filter(g => g.members.length > 0);
 
   return (
     <div style={{minHeight:"100vh",background:"#080814",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Barlow',sans-serif"}}>
@@ -380,7 +377,7 @@ function LoginScreen({onLogin}) {
 
       {/* Login card */}
       <div style={{background:"#0e0e1e",border:"1px solid #2a2a4a",borderRadius:14,padding:"28px 28px",width:"100%",maxWidth:380,boxShadow:"0 20px 60px rgba(0,0,0,0.5)"}}>
-        <div style={{fontSize:13,color:"#8888bb",marginBottom:20,textAlign:"center"}}>Sign in with your username to continue</div>
+        <div style={{fontSize:13,color:"#8888bb",marginBottom:20,textAlign:"center"}}>Sign in to continue</div>
 
         <label style={{display:"block",fontSize:10,color:"#5555aa",fontWeight:800,letterSpacing:1.2,marginBottom:6}}>USERNAME</label>
         <input
@@ -388,42 +385,36 @@ function LoginScreen({onLogin}) {
           value={username}
           onChange={e=>{setUsername(e.target.value);setError("");}}
           onKeyDown={handleKey}
-          placeholder="e.g. jduguay"
-          style={{width:"100%",background:"#080814",border:`1px solid ${error?"#E53935":"#2a2a44"}`,borderRadius:8,padding:"12px 14px",color:"#e0e0ff",fontSize:16,fontFamily:"inherit",outline:"none",boxSizing:"border-box",letterSpacing:1}}
+          placeholder="Enter your username"
+          autoComplete="username"
+          style={{width:"100%",background:"#080814",border:"1px solid #2a2a44",borderRadius:8,padding:"12px 14px",color:"#e0e0ff",fontSize:15,fontFamily:"inherit",outline:"none",boxSizing:"border-box",letterSpacing:1,marginBottom:14}}
         />
-        {error && <div style={{color:"#FF5252",fontSize:12,marginTop:6,fontWeight:600}}>⚠ {error}</div>}
+
+        <label style={{display:"block",fontSize:10,color:"#5555aa",fontWeight:800,letterSpacing:1.2,marginBottom:6}}>PASSWORD</label>
+        <div style={{position:"relative"}}>
+          <input
+            type={showPw?"text":"password"}
+            value={password}
+            onChange={e=>{setPassword(e.target.value);setError("");}}
+            onKeyDown={handleKey}
+            placeholder="Enter your password"
+            autoComplete="current-password"
+            style={{width:"100%",background:"#080814",border:`1px solid ${error?"#E53935":"#2a2a44"}`,borderRadius:8,padding:"12px 40px 12px 14px",color:"#e0e0ff",fontSize:15,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}
+          />
+          <button onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#4444aa",cursor:"pointer",fontSize:13,padding:4}}>
+            {showPw?"HIDE":"SHOW"}
+          </button>
+        </div>
+        {error && <div style={{color:"#FF5252",fontSize:12,marginTop:8,fontWeight:600}}>⚠ {error}</div>}
 
         <button
           onClick={handleLogin}
-          style={{width:"100%",marginTop:16,background:"#2979FF",color:"#fff",border:"none",borderRadius:8,padding:"13px 0",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1,transition:"background 0.15s"}}
+          style={{width:"100%",marginTop:18,background:"#2979FF",color:"#fff",border:"none",borderRadius:8,padding:"13px 0",fontFamily:"inherit",fontSize:14,fontWeight:700,cursor:"pointer",letterSpacing:1,transition:"background 0.15s"}}
           onMouseEnter={e=>e.target.style.background="#1a66ee"}
           onMouseLeave={e=>e.target.style.background="#2979FF"}
         >
           SIGN IN →
         </button>
-
-        <div style={{borderTop:"1px solid #1a1a2e",marginTop:22,paddingTop:16}}>
-          <div style={{fontSize:10,color:"#4444aa",fontWeight:800,letterSpacing:1,marginBottom:10,textAlign:"center"}}>OR SELECT YOUR NAME</div>
-          <div style={{maxHeight:240,overflowY:"auto",display:"flex",flexDirection:"column",gap:10}}>
-            {grouped.map(({dept,members})=>(
-              <div key={dept}>
-                <div style={{fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1.5,marginBottom:5,paddingLeft:2}}>{dept.toUpperCase()}</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-                  {members.map(s=>(
-                    <button key={s.username} onClick={()=>onLogin(s)}
-                      style={{background:"#141424",color:"#c0c0e0",border:"1px solid #2a2a3e",borderRadius:6,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"inherit",textAlign:"left",fontWeight:500,transition:"border-color 0.1s"}}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor="#2979FF"}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor="#2a2a3e"}
-                    >
-                      <div style={{fontWeight:700,color:"#e0e0ff",fontSize:12}}>{s.name}</div>
-                      <div style={{fontSize:9,color:"#5566aa",marginTop:1}}>{s.username}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
       <div style={{marginTop:16,fontSize:11,color:"#333366"}}>Century Auto Group · Internal System</div>
@@ -623,7 +614,7 @@ function App(){
     if(fNoKey)r=r.filter(v=>!v.keyLocation);
     if(fNoFile)r=r.filter(v=>!v.fileLocation);
     const q=search.toLowerCase();
-    if(q)r=r.filter(v=>[v.stock,v.make,v.model,v.trim,v.color,v.vin,v.keyLocation,v.fileLocation].some(s=>(s && s.toLowerCase)().includes(q)));
+    if(q)r=r.filter(v=>[v.stock,v.make,v.model,v.trim,v.color,v.vin,v.keyLocation,v.fileLocation].some(s=>(s && s.toLowerCase().includes(q))));
     return [...r].sort((a,b)=>{
       const av=(a[sortCol]||"").toString().toLowerCase(),bv=(b[sortCol]||"").toString().toLowerCase();
       return sortDir==="asc"?av.localeCompare(bv,undefined,{numeric:true}):bv.localeCompare(av,undefined,{numeric:true});
