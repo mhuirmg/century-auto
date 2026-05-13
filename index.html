@@ -40,7 +40,7 @@ const fromDB = r => ({
 const toDB = v => ({
   vin: v.vin, stock: v.stock, year: v.year, make: v.make, model: v.model,
   trim: v.trim, color: v.color, odometer: v.odometer, make_ready: v.makeReady,
-  type: v.type, status: v.status, key_location: v.keyLocation,
+  type: v.type, status: v.status, key_location: v.keyLocation, key_count: v.keyCount,
   file_location: v.fileLocation, detailed: v.detailed, key_log: v.keyLog,
   file_log: v.fileLog, detail_log: v.detailLog, make_ready_log: v.makeReadyLog,
   added_by: v.addedBy, added_at: v.addedAt,
@@ -304,7 +304,7 @@ const NEW_DATA = [
 ];
 
 const DEFAULT_VEHICLES = [...USED_DATA, ...NEW_DATA].map((v, i) => ({
-  ...v, id: i+1, keyLocation:"", fileLocation:"", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
+  ...v, id: i+1, keyLocation:"", fileLocation:"", keyCount:"2 Keys+", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
   keyLog:"", fileLog:"", detailLog:"", makeReadyLog:""
 }));
 
@@ -499,6 +499,7 @@ function VehicleForm({vehicle,onSave,onClose}){
       <div><label style={lbl}>VIN</label><input style={inp} value={form.vin} onChange={e=>set("vin",e.target.value.toUpperCase())}/></div>
       <div style={g2}>
         <div><label style={lbl}>🔑 KEY LOCATION</label><select style={inp} value={form.keyLocation} onChange={e=>set("keyLocation",e.target.value)}>{KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+        <div><label style={lbl}>🔑 NUMBER OF KEYS</label><select style={inp} value={form.keyCount||'2 Keys+'} onChange={e=>set("keyCount",e.target.value)}><option value="1 Key">1 Key</option><option value="2 Keys+">2 Keys+</option></select></div>
         <div><label style={lbl}>📁 FILE LOCATION</label><select style={inp} value={form.fileLocation} onChange={e=>set("fileLocation",e.target.value)}>{FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
       </div>
       <div style={g2}>
@@ -759,6 +760,7 @@ function App(){
                 <TH col="trim" label="TRIM"/>
                 <TH col="color" label="COLOR"/>
                 <TH col="keyLocation" label="🔑 KEY LOCATION"/>
+                <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128",whiteSpace:"nowrap"}}>🔑 KEYS #</th>
                 <TH col="fileLocation" label="📁 FILE LOCATION"/>
                 <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128",whiteSpace:"nowrap"}}>🚿 DETAIL</th>
                 <th style={{padding:"8px 6px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,borderBottom:"1px solid #111128",whiteSpace:"nowrap"}}>✅ MAKE READY</th>
@@ -838,7 +840,7 @@ function App(){
               </div>
               {/* Key + File */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
-                {[["🔑",v.keyLocation,v.keyLog],["📁",v.fileLocation,v.fileLog]].map(([icon,val,log])=>(
+                {[["🔑",(v.keyLocation?(v.keyLocation+(v.keyCount?" · "+v.keyCount:"")):null),v.keyLog],["📁",v.fileLocation,v.fileLog]].map(([icon,val,log])=>(
                   <div key={icon} style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
                     <div style={{fontSize:isMobile?11:10,color:val?"#7799ff":"#ff6655",fontWeight:600}}>{icon} {val||"NOT SET"}</div>
                     {log&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {log}</div>}
