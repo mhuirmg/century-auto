@@ -515,6 +515,124 @@ function VehicleForm({vehicle,onSave,onClose}){
   </div>;
 }
 
+
+// ── Sold Deals File Manager ──────────────────────────────────────────────────
+
+// File location options: all staff names + Accounting
+const FILE_STAFF = ["Accounting",...STAFF.map(s=>s.name)];
+
+// Format posting date MM/DD/YYYY -> "Mon YYYY"
+function formatPostingDate(d) {
+  if(!d) return "";
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const parts = d.split("/");
+  if(parts.length === 3) {
+    const m = parseInt(parts[0],10)-1;
+    const y = parts[2];
+    return months[m]+" "+y;
+  }
+  return d;
+}
+
+// Supabase helpers for sold_deals table
+const soldSupa = {
+  async get() {
+    const r = await fetch(`${SUPA_URL}/rest/v1/sold_deals?select=*&order=posting_date.desc`, {headers:{...HEADERS,"Prefer":"return=representation"}});
+    if(!r.ok) throw new Error(await r.text());
+    return await r.json();
+  },
+  async update(id, fields) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/sold_deals?id=eq.${id}`, {method:"PATCH",headers:{...HEADERS,"Prefer":"return=representation"},body:JSON.stringify(fields)});
+    if(!r.ok) throw new Error(await r.text());
+  },
+};
+
+function SoldDeals({currentUser}) {
+  const [deals, setDeals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(()=>{
+    soldSupa.get()
+      .then(data => { setDeals(data); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  },[]);
+
+  const updateFile = async (id, fileLocation) => {
+    const stamp = `${(currentUser && currentUser.name)||"?"} · ${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"})}`;
+    const prev = deals.find(d=>d.id===id);
+    const log = prev ? (prev.file_log ? prev.file_log+"
+"+stamp+" → "+fileLocation : stamp+" → "+fileLocation) : stamp+" → "+fileLocation;
+    try {
+      await soldSupa.update(id, {file_location: fileLocation, file_log: log});
+      setDeals(ds=>ds.map(d=>d.id===id?{...d,file_location:fileLocation,file_log:log}:d));
+    } catch(e) { alert("Update failed: "+e.message); }
+  };
+
+  const filtered = deals.filter(d=>{
+    if(!search) return true;
+    const q = search.toLowerCase();
+    return [d.stock,d.customer_name,d.make,d.model,d.sales_rep,d.vin,d.deal_key].some(s=>s&&String(s).toLowerCase().includes(q));
+  });
+
+  const selStyle = (set) => ({
+    background: set ? "#0a1628" : "#1a0a0a",
+    border: "1px solid "+(set?"#2979FF":"#aa3333"),
+    borderRadius:5, color: set?"#7aadff":"#ff8888",
+    padding:"4px 6px", fontSize:12, minWidth:140, cursor:"pointer", fontFamily:"inherit"
+  });
+
+  if(loading) return <div style={{padding:40,textAlign:"center",color:"#4466ff"}}>Loading sold deals...</div>;
+  if(error) return <div style={{padding:40,textAlign:"center",color:"#ff5555"}}>Could not load sold deals: {error}</div>;
+
+  return (
+    <div style={{padding:"12px 10px"}}>
+      {/* Search */}
+      <div style={{marginBottom:12,display:"flex",gap:10,alignItems:"center"}}>
+        <input
+          value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍 Search stock, customer, make, model, sales rep..."
+          style={{flex:1,background:"#0e0e1e",border:"1px solid #2a2a44",borderRadius:8,padding:"10px 14px",color:"#e0e0ff",fontSize:14,fontFamily:"inherit",outline:"none"}}
+        />
+        <div style={{fontSize:11,color:"#4444aa",whiteSpace:"nowrap"}}>{filtered.length} deals</div>
+      </div>
+
+      {/* Table */}
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+          <thead>
+            <tr style={{borderBottom:"2px solid #2a2a4a"}}>
+              {["POSTING","STOCK","CUSTOMER","YEAR / MAKE / MODEL","SALES REP","FILE LOCATION"].map(h=>(
+                <th key={h} style={{padding:"8px 8px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(d=>(
+              <tr key={d.id} style={{borderBottom:"1px solid #111128"}}>
+                <td style={{padding:"6px 8px",color:"#8888cc",whiteSpace:"nowrap",fontSize:12}}>{formatPostingDate(d.posting_date)}</td>
+                <td style={{padding:"6px 8px",color:"#2979FF",fontWeight:700,whiteSpace:"nowrap"}}>{d.stock||"—"}</td>
+                <td style={{padding:"6px 8px",color:"#e0e0ff",whiteSpace:"nowrap"}}>{d.customer_name||"—"}</td>
+                <td style={{padding:"6px 8px",color:"#c0c0e0",whiteSpace:"nowrap"}}>{[d.year,d.make,d.model].filter(Boolean).join(" ")||"—"}</td>
+                <td style={{padding:"6px 8px",color:"#8888cc",whiteSpace:"nowrap",fontSize:12}}>{d.sales_rep||"—"}</td>
+                <td style={{padding:"4px 6px"}}>
+                  <select value={d.file_location||""} onChange={e=>updateFile(d.id,e.target.value)} style={selStyle(!!d.file_location)}>
+                    <option value="">— Not Set —</option>
+                    {FILE_STAFF.map(s=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                  {d.file_log && <div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:180}} title={d.file_log}>↳ {d.file_log.split("\n").pop()}</div>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length===0 && <div style={{padding:40,textAlign:"center",color:"#333366"}}>No deals found</div>}
+      </div>
+    </div>
+  );
+}
+
 function App(){
   const [vehicles,setVehicles,loading,dbError,reloadVehicles]=useVehicles();
   const [search,setSearch]=useState("");
@@ -535,6 +653,7 @@ function App(){
     window.addEventListener("resize", handler);
     return () => window.removeEventListener("resize", handler);
   },[]);
+  const [mainView,setMainView]=useState("inventory");
   const [sortCol,setSortCol]=useState("stock");
   const [sortDir,setSortDir]=useState("asc");
 
@@ -672,7 +791,10 @@ function App(){
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:isMobile?18:22,letterSpacing:2,color:"#fff",lineHeight:1,whiteSpace:"nowrap"}}>CENTURY AUTO</div>
           {!loading&&!dbError&&<div title="Live sync active" style={{width:7,height:7,borderRadius:"50%",background:"#00C853",boxShadow:"0 0 6px #00C853",flexShrink:0}}/>}
           {!isMobile&&<><div style={{width:1,height:22,background:"#2a2a4a"}}/>
-          <div style={{fontSize:9,color:"#4444aa",letterSpacing:2,fontWeight:800}}>INVENTORY · KEYS · FILES</div></>}
+          <div style={{display:"flex",gap:4}}>
+            <button onClick={()=>setMainView("inventory")} style={{background:mainView==="inventory"?"#2979FF":"transparent",color:mainView==="inventory"?"#fff":"#4444aa",border:"1px solid "+(mainView==="inventory"?"#2979FF":"#2a2a4a"),borderRadius:4,padding:"3px 10px",fontSize:9,fontWeight:800,letterSpacing:1.5,cursor:"pointer",fontFamily:"inherit"}}>INVENTORY</button>
+            <button onClick={()=>setMainView("sold")} style={{background:mainView==="sold"?"#e53935":"transparent",color:mainView==="sold"?"#fff":"#4444aa",border:"1px solid "+(mainView==="sold"?"#e53935":"#2a2a4a"),borderRadius:4,padding:"3px 10px",fontSize:9,fontWeight:800,letterSpacing:1.5,cursor:"pointer",fontFamily:"inherit"}}>SOLD FILES</button>
+          </div></>}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{display:"flex",alignItems:"center",gap:6,background:"#1a1a2e",border:"1px solid #2a2a4a",borderRadius:6,padding:"5px 10px"}}>
@@ -690,6 +812,7 @@ function App(){
 
     <div style={{maxWidth:1700,margin:"0 auto",padding:isMobile?"10px 10px":"12px 20px"}}>
 
+      {mainView==="sold" ? <SoldDeals currentUser={currentUser}/> : <>
       {/* STATS */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)",gap:isMobile?6:8,marginBottom:isMobile?10:12}}>
         {[
@@ -875,6 +998,8 @@ function App(){
           </div>
         ))}
       </div>}
+    </>
+    }
     </div>
 
 
