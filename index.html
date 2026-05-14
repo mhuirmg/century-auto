@@ -562,7 +562,8 @@ function SoldDeals({currentUser}) {
   const updateFile = async (id, fileLocation) => {
     const stamp = `${(currentUser && currentUser.name)||"?"} · ${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"})}`;
     const prev = deals.find(d=>d.id===id);
-    const log = prev ? (prev.file_log ? prev.file_log+"\n"+stamp+" → "+fileLocation : stamp+" → "+fileLocation) : stamp+" → "+fileLocation;
+    const logEntry = stamp + " > " + fileLocation;
+    const log = (prev && prev.file_log) ? prev.file_log + "\n" + logEntry : logEntry;
     try {
       await soldSupa.update(id, {file_location: fileLocation, file_log: log});
       setDeals(ds=>ds.map(d=>d.id===id?{...d,file_location:fileLocation,file_log:log}:d));
