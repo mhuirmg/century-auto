@@ -87,9 +87,10 @@ const supa = {
     return ws;
   }
 };
-const MR_USED = ["", "Complete", "In Progress", "Pending"];
+const MR_USED = ["", "Century Certified", "MVI", "MVI Only"];
 const MR_NEW = ["", "Century Certified", "MVI", "MVI Only"];
 const STATUS_OPTIONS = ["available", "deposit", "in shop", "to be delivered", "sold & delivered"];
+const MR_OPTS = ["", "Century Certified", "MVI", "MVI Only"];
 const KEY_BOXES = ["","Wash Bay","Sales","Service","Parts","Accounting","F&I","Key Box","Customer (Test Drive)","Customer (Loaner)"];
 const FILE_LOCS = ["",
   // Sales
@@ -304,7 +305,7 @@ const NEW_DATA = [
 ];
 
 const DEFAULT_VEHICLES = [...USED_DATA, ...NEW_DATA].map((v, i) => ({
-  ...v, id: i+1, keyLocation:"", fileLocation:"", keyCount:"2 Keys+", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
+  ...v, id: i+1, keyLocation:"", fileLocation:"", keyCount:"2+", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
   keyLog:"", fileLog:"", detailLog:"", makeReadyLog:""
 }));
 
@@ -475,7 +476,7 @@ const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
 function VehicleForm({vehicle,onSave,onClose}){
   const [form,setForm]=useState(vehicle||{stock:"",year:new Date().getFullYear(),make:"",model:"",trim:"",color:"",vin:"",odometer:"",keyLocation:"",fileLocation:"",detailed:false,makeReady:"",status:"available",type:"used",addedBy:"",addedAt:new Date().toISOString().slice(0,10)});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const mrOpts=form.type==="new"?MR_NEW:MR_USED;
+  const mrOpts=MR_OPTS;
   const submit=()=>{if(!form.stock||!form.make||!form.model)return alert("Stock #, Make, Model required");onSave(form);};
   return <div>
     <h3 style={{margin:"0 0 18px",color:"#a0a0ff",fontSize:15,fontFamily:"inherit"}}>{vehicle?`✏️ Edit ${vehicle.stock}`:"➕ Add Vehicle"}</h3>
@@ -499,11 +500,11 @@ function VehicleForm({vehicle,onSave,onClose}){
       <div><label style={lbl}>VIN</label><input style={inp} value={form.vin} onChange={e=>set("vin",e.target.value.toUpperCase())}/></div>
       <div style={g2}>
         <div><label style={lbl}>🔑 KEY LOCATION</label><select style={inp} value={form.keyLocation} onChange={e=>set("keyLocation",e.target.value)}>{KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
-        <div><label style={lbl}>🔑 NUMBER OF KEYS</label><select style={inp} value={form.keyCount||'2 Keys+'} onChange={e=>set("keyCount",e.target.value)}><option value="1 Key">1 Key</option><option value="2 Keys+">2 Keys+</option></select></div>
+        <div><label style={lbl}>🔑 NUMBER OF KEYS</label><select style={inp} value={form.keyCount||'2+'} onChange={e=>set("keyCount",e.target.value)}><option value="1">1</option><option value="2+">2+</option></select></div>
         <div><label style={lbl}>📁 FILE LOCATION</label><select style={inp} value={form.fileLocation} onChange={e=>set("fileLocation",e.target.value)}>{FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
       </div>
       <div style={g2}>
-        <div><label style={lbl}>MAKE READY</label><select style={inp} value={form.makeReady} onChange={e=>set("makeReady",e.target.value)}>{mrOpts.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+        <div><label style={lbl}>MAKE READY</label><select style={inp} value={form.makeReady} onChange={e=>set("makeReady",e.target.value)}>{MR_OPTS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
         <div><label style={lbl}>🚿 DETAIL STATUS</label><select style={inp} value={form.detailed?"yes":"no"} onChange={e=>set("detailed",e.target.value==="yes")}><option value="no">✗ Not Detailed</option><option value="yes">✓ Detailed</option></select></div>
       </div>
       <div><label style={lbl}>ENTERED BY</label><input style={inp} value={form.addedBy} onChange={e=>set("addedBy",e.target.value)} placeholder="Your name"/></div>
@@ -767,7 +768,7 @@ function App(){
 
   const selStyle=(hasVal)=>({background:hasVal?"#0e1e2e":"#2a0a0a",border:`1px solid ${hasVal?"#1e3a5a":"#5a1a1a"}`,borderRadius:4,padding:"3px 5px",color:hasVal?"#88aaff":"#ff6666",fontSize:11,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",maxWidth:150});
 
-  const allMRopts=[...new Set([...MR_USED,...MR_NEW])].filter(Boolean);
+  const allMRopts=["Century Certified","MVI","MVI Only"];
   const font="@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&family=Barlow:wght@400;500;600&display=swap');";
 
   if(!currentUser) return <LoginScreen onLogin={(user)=>{setCurrentUser(user);localStorage.setItem("century_user_v2",JSON.stringify(user));}}/>
@@ -901,33 +902,53 @@ function App(){
                 <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:12,color:"#e0e0ff",whiteSpace:"nowrap"}}>{v.model}</td>
                 <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#8888bb",whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{v.trim}</td>
                 <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#9090cc",whiteSpace:"nowrap"}}>{v.color||"—"}</td>
+                {/* KEY LOCATION */}
                 <td style={{padding:"4px 6px"}}>
                   <select value={v.keyLocation} onChange={e=>qs(v.id,"keyLocation",e.target.value)} style={selStyle(!!v.keyLocation)}>
                     {KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
                   </select>
                   {v.keyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.keyLog}>↳ {v.keyLog}</div>}
                 </td>
+                {/* KEYS # */}
+                <td style={{padding:"4px 6px"}}>
+                  <select value={v.keyCount||"2+"} onChange={e=>qs(v.id,"keyCount",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer",minWidth:46}}>
+                    <option value="1">1</option>
+                    <option value="2+">2+</option>
+                  </select>
+                </td>
+                {/* FILE LOCATION */}
                 <td style={{padding:"4px 6px"}}>
                   <select value={v.fileLocation} onChange={e=>qs(v.id,"fileLocation",e.target.value)} style={selStyle(!!v.fileLocation)}>
                     {FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
                   </select>
                   {v.fileLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.fileLog}>↳ {v.fileLog}</div>}
                 </td>
+                {/* DETAIL */}
                 <td style={{padding:"4px 6px"}}>
-                  <button onClick={()=>togDetail(v.id)} style={{background:"transparent",border:"none",cursor:"pointer",padding:0}}>
-                    <Bdg label={v.detailed?"✓ Done":"✗ Needed"} bg={v.detailed?"#0a2a0a":"#2a0a08"} small/>
-                  </button>
+                  <select value={v.detailed?"Done":"Needed"} onChange={e=>qs(v.id,"detailed",e.target.value==="Done")} style={{background:v.detailed?"#0a2a0a":"#2a0a08",border:"1px solid "+(v.detailed?"#1a4a1a":"#4a1a1a"),borderRadius:4,padding:"3px 5px",color:v.detailed?"#44dd44":"#ff6644",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+                    <option value="Needed">✗ Needed</option>
+                    <option value="Done">✓ Done</option>
+                  </select>
                   {v.detailLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}} title={v.detailLog}>↳ {v.detailLog}</div>}
                 </td>
+                {/* MAKE READY */}
                 <td style={{padding:"4px 6px"}}>
-                  <select value={v.makeReady} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
-                    {(v.type==="new"?MR_NEW:MR_USED).map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
+                  <select value={v.makeReady||""} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
+                    <option value="">— Not Set —</option>
+                    <option value="Century Certified">Century Certified</option>
+                    <option value="MVI">MVI</option>
+                    <option value="MVI Only">MVI Only</option>
                   </select>
                   {v.makeReadyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}} title={v.makeReadyLog}>↳ {v.makeReadyLog}</div>}
                 </td>
-                <td style={{padding:"5px 6px"}}>
+                {/* STATUS */}
+                <td style={{padding:"4px 6px"}}>
                   <select value={v.status} onChange={e=>qs(v.id,"status",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
-                    {STATUS_OPTIONS.map(o=><option key={o} value={o}>{o.charAt(0).toUpperCase()+o.slice(1)}</option>)}
+                    <option value="available">Available</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="in shop">In Shop</option>
+                    <option value="to be delivered">To Deliver</option>
+                    <option value="sold & delivered">Sold</option>
                   </select>
                 </td>
                 <td style={{padding:"5px 6px"}}>
@@ -980,9 +1001,9 @@ function App(){
               </button>
               <div style={{borderRight:"1px solid #111128",padding:isMobile?"6px 4px":"4px 4px",display:"flex",flexDirection:"column",gap:2,alignItems:"center",justifyContent:"center"}}>
                 <span style={{fontSize:8,color:"#3333aa",fontWeight:800}}>READY</span>
-                <select value={v.makeReady} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"transparent",border:"none",color:"#e0e0ff",fontSize:9,fontFamily:"inherit",cursor:"pointer",maxWidth:72,textAlign:"center"}}>
-                  {(v.type==="new"?MR_NEW:MR_USED).map(o=><option key={o} value={o}>{o||"—"}</option>)}
-                </select>
+                <select value={v.makeReady||""} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"transparent",border:"none",color:"#e0e0ff",fontSize:9,fontFamily:"inherit",cursor:"pointer",maxWidth:90,textAlign:"center"}}>
+                  {MR_OPTS.map(o=><option key={o} value={o}>{o||"Not Set"}</option>)}
+                  </select>
               </div>
               <div style={{borderRight:"1px solid #111128",padding:isMobile?"6px 4px":"4px 4px",display:"flex",flexDirection:"column",gap:2,alignItems:"center",justifyContent:"center"}}>
                 <span style={{fontSize:8,color:"#3333aa",fontWeight:800}}>STATUS</span>
