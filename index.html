@@ -31,7 +31,7 @@ const fromDB = r => ({
   id: r.id, vin: r.vin||"", stock: r.stock||"", year: r.year, make: r.make||"",
   model: r.model||"", trim: r.trim||"", color: r.color||"", odometer: r.odometer||0,
   makeReady: r.make_ready||"", type: r.type||"used", status: r.status||"available",
-  keyLocation: r.key_location||"", fileLocation: r.file_location||"",
+  keyLocation: r.key_location||"", fileLocation: r.file_location||"Drawer",
   detailed: r.detailed||false, keyLog: r.key_log||"", fileLog: r.file_log||"",
   detailLog: r.detail_log||"", makeReadyLog: r.make_ready_log||"",
   addedBy: r.added_by||"", addedAt: r.added_at||"",
@@ -92,7 +92,7 @@ const MR_NEW = ["", "Century Certified", "MVI", "MVI Only"];
 const STATUS_OPTIONS = ["available", "deposit", "in shop", "to be delivered", "sold & delivered"];
 const MR_OPTS = ["", "Century Certified", "MVI", "MVI Only"];
 const KEY_BOXES = ["","Wash Bay","Sales","Service","Parts","Accounting","F&I","Key Box","Customer (Test Drive)","Customer (Loaner)"];
-const FILE_LOCS = ["",
+const FILE_LOCS = ["","Drawer",
   // Sales
   "Josh Duguay","Will Fraser","Nathan Bryant","Benjamin Anthony",
   "Steve Hines","Cole McLeman","Gabby Swica","Julie Lewis",
@@ -305,7 +305,7 @@ const NEW_DATA = [
 ];
 
 const DEFAULT_VEHICLES = [...USED_DATA, ...NEW_DATA].map((v, i) => ({
-  ...v, id: i+1, keyLocation:"", fileLocation:"", keyCount:"2+", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
+  ...v, id: i+1, keyLocation:"", fileLocation:"", keyCount:"2+", fileLocation:"Drawer", detailed:false, status:"available", addedBy:"Import", addedAt:"2026-04-23",
   keyLog:"", fileLog:"", detailLog:"", makeReadyLog:""
 }));
 
