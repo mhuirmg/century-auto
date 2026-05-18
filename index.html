@@ -840,8 +840,8 @@ function App(){
             </button>)}
           </div>}
         </div>
-        {/* Expanded filters */}
-        {(!isMobile||showFilters)&&<div>
+        {/* Expanded filters - type/status always visible, advanced behind toggle */}
+        <div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:8}}>
             <div style={{display:"flex",gap:3,background:"#060610",borderRadius:8,padding:3}}>
               {[["all","All"],["used","Used"],["new","New"]].map(([v,l])=>(
@@ -851,7 +851,7 @@ function App(){
             {!isMobile&&<div style={{width:1,height:22,background:"#1a1a2e"}}/>}
             {STATUS_OPTIONS.map(s=>pill(fStatus===s,()=>setFStatus(fStatus===s?"all":s), s==="in shop"?"In Shop":s==="to be delivered"?"To Deliver":s==="sold & delivered"?"Sold":s.charAt(0).toUpperCase()+s.slice(1)))}
           </div>
-          <div style={{display:"flex",gap:isMobile?8:8,flexWrap:"wrap",alignItems:"center"}}>
+          {(!isMobile||showFilters)&&<div style={{display:"flex",gap:isMobile?8:8,flexWrap:"wrap",alignItems:"center",marginTop:isMobile?6:0}}>
             {pill(fDetail==="no",()=>setFDetail(fDetail==="no"?"all":"no"),"Needs Detail",stats.noDetail)}
             {pill(fDetail==="yes",()=>setFDetail(fDetail==="yes"?"all":"yes"),"Detailed")}
             <select value={fMR} onChange={e=>setFMR(e.target.value)} style={{background:"#060610",border:"1px solid #1a1a2a",borderRadius:6,padding:"6px 10px",color:"#e0e0ff",fontFamily:"inherit"}}>
@@ -864,8 +864,8 @@ function App(){
             <label style={{color:fNoFile?"#ff6655":"#6666aa",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:700,userSelect:"none",padding:"6px 0"}}>
               <input type="checkbox" checked={fNoFile} onChange={e=>setFNoFile(e.target.checked)} style={{accentColor:"#FF5252",width:16,height:16}}/>📁 No File
             </label>
-          </div>
-        </div>}
+          </div>}
+        </div>
       </div>
 
       <div style={{fontSize:10,color:"#333388",marginBottom:8,fontWeight:700}}>SHOWING {filtered.length} OF {vehicles.length} VEHICLES</div>
@@ -984,7 +984,7 @@ function App(){
               </div>
               {/* Key + File */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
-                {[["🔑",(v.keyLocation?(v.keyLocation+(v.keyCount?" · "+v.keyCount:"")):null),v.keyLog],["📁",v.fileLocation,v.fileLog]].map(([icon,val,log])=>(
+                {[["🔑 KEY",v.keyLocation,v.keyLog],["📁 FILE",v.fileLocation,v.fileLog],["🔑 KEYS #",v.keyCount||"2+",null]].map(([icon,val,log])=>(
                   <div key={icon} style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
                     <div style={{fontSize:isMobile?11:10,color:val?"#7799ff":"#ff6655",fontWeight:600}}>{icon} {val||"NOT SET"}</div>
                     {log&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {log}</div>}
