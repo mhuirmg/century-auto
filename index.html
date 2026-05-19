@@ -92,10 +92,10 @@ const supa = {
     return ws;
   }
 };
-const MR_USED = ["", "Century Certified", "MVI", "MVI Only"];
-const MR_NEW = ["", "Century Certified", "MVI", "MVI Only"];
+const MR_USED = ["", "Century Certified", "MVI INP", "MVI Only"];
+const MR_NEW = ["", "Century Certified", "MVI INP", "MVI Only"];
 const STATUS_OPTIONS = ["available", "deposit", "in shop", "to be delivered", "sold & delivered"];
-const MR_OPTS = ["", "Century Certified", "MVI", "MVI Only"];
+const MR_OPTS = ["", "Century Certified", "MVI INP", "MVI Only"];
 const KEY_BOXES = ["","Wash Bay","Sales","Service","Parts","Accounting","F&I","Key Box","Customer (Test Drive)","Customer (Loaner)"];
 const FILE_LOCS = ["","Drawer",
   // Sales
@@ -117,7 +117,7 @@ const FILE_LOCS = ["","Drawer",
   "Other",
 ];
 const STATUS_COLORS = {available:"#00897B",deposit:"#FFB300","in shop":"#7C4DFF","to be delivered":"#0097A7","sold & delivered":"#E53935"};
-const MR_COLORS = {"Century Certified":"#2979FF","MVI":"#AA00FF","MVI Only":"#FF6D00","Complete":"#00C853","In Progress":"#FFB300","Pending":"#F4511E"};
+const MR_COLORS = {"Century Certified":"#2979FF","MVI INP":"#AA00FF","MVI Only":"#FF6D00","Complete":"#00C853","In Progress":"#FFB300","Pending":"#F4511E"};
 
 const USED_DATA = [
 {vin:"KL7CJKSB4LB331867",stock:"5747B",year:2020,make:"CHEVROLET",model:"TRAX",trim:"LS",color:"BLACK",odometer:98591,makeReady:"Complete",type:"used"},
@@ -834,7 +834,7 @@ function App(){
 
   const selStyle=(hasVal)=>({background:hasVal?"#0e1e2e":"#2a0a0a",border:`1px solid ${hasVal?"#1e3a5a":"#5a1a1a"}`,borderRadius:4,padding:"3px 5px",color:hasVal?"#88aaff":"#ff6666",fontSize:11,fontFamily:"'JetBrains Mono',monospace",cursor:"pointer",maxWidth:150});
 
-  const allMRopts=["Century Certified","MVI","MVI Only"];
+  const allMRopts=["Century Certified","MVI INP","MVI Only"];
   const font="@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&family=Barlow:wght@400;500;600&display=swap');";
 
   if(!currentUser) return <LoginScreen onLogin={(user)=>{setCurrentUser(user);localStorage.setItem("century_user_v2",JSON.stringify(user));}}/>
@@ -1005,7 +1005,7 @@ function App(){
                   <select value={v.makeReady||""} onChange={e=>qs(v.id,"makeReady",e.target.value)} style={{background:"#0a0a18",border:"1px solid #1e1e34",borderRadius:4,padding:"3px 5px",color:"#e0e0ff",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>
                     <option value="">— Not Set —</option>
                     <option value="Century Certified">Century Certified</option>
-                    <option value="MVI">MVI</option>
+                    <option value="MVI INP">MVI</option>
                     <option value="MVI Only">MVI Only</option>
                   </select>
                   {v.makeReadyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:130}} title={v.makeReadyLog}>↳ {v.makeReadyLog}</div>}
