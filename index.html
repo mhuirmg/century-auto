@@ -1051,14 +1051,38 @@ function App(){
                   <Bdg label={v.status==="in shop"?"In Shop":v.status==="to be delivered"?"To Deliver":v.status==="sold & delivered"?"Sold✓":v.status.charAt(0).toUpperCase()+v.status.slice(1)} bg={STATUS_COLORS[v.status]||"#333"} small/>
                 </div>
               </div>
-              {/* Key + File */}
+              {/* Key Location, Keys #, File Location — interactive dropdowns */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginTop:8}}>
-                {[["🔑 KEY",v.keyLocation,v.keyLog],["📁 FILE",v.fileLocation,v.fileLog],["🔑 KEYS #",v.keyCount||"2+",null]].map(([icon,val,log])=>(
-                  <div key={icon} style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
-                    <div style={{fontSize:isMobile?11:10,color:val?"#7799ff":"#ff6655",fontWeight:600}}>{icon} {val||"NOT SET"}</div>
-                    {log&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {log}</div>}
-                  </div>
-                ))}
+                {/* Key Location */}
+                <div style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
+                  <div style={{fontSize:9,color:"#5566aa",fontWeight:800,letterSpacing:1,marginBottom:3}}>🔑 KEY LOCATION</div>
+                  <select value={v.keyLocation||""} onChange={e=>qs(v.id,"keyLocation",e.target.value)}
+                    style={{width:"100%",background:"transparent",border:"none",color:v.keyLocation?"#7799ff":"#ff6655",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer",padding:0,outline:"none"}}>
+                    {KEY_BOXES.map(o=><option key={o} value={o} style={{background:"#0e0e1e"}}>{o||"— Not Set —"}</option>)}
+                  </select>
+                  {v.keyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {v.keyLog}</div>}
+                </div>
+                {/* Keys # */}
+                <div style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
+                  <div style={{fontSize:9,color:"#5566aa",fontWeight:800,letterSpacing:1,marginBottom:3}}>🔑 KEYS #</div>
+                  <select value={v.keyCount||"2+"} onChange={e=>qs(v.id,"keyCount",e.target.value)}
+                    style={{width:"100%",background:"transparent",border:"none",color:"#7799ff",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer",padding:0,outline:"none"}}>
+                    <option value="1" style={{background:"#0e0e1e"}}>1</option>
+                    <option value="2+" style={{background:"#0e0e1e"}}>2+</option>
+                  </select>
+                </div>
+                {/* File Location — spans full width */}
+                <div style={{background:"#060610",borderRadius:5,padding:"5px 8px",gridColumn:"1/-1"}}>
+                  <div style={{fontSize:9,color:"#5566aa",fontWeight:800,letterSpacing:1,marginBottom:3}}>📁 FILE LOCATION</div>
+                  <select value={v.fileLocation||"Drawer"} onChange={e=>qs(v.id,"fileLocation",e.target.value)}
+                    style={{width:"100%",background:"transparent",border:"none",color:v.fileLocation?"#7799ff":"#ff6655",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer",padding:0,outline:"none"}}>
+                    <option value="" style={{background:"#0e0e1e"}}>— Not Set —</option>
+                    <option value="Drawer" style={{background:"#0e0e1e"}}>Drawer</option>
+                    {currentUser&&<option value={currentUser.name} style={{background:"#0e0e1e"}}>{currentUser.name} (me)</option>}
+                    {FILE_LOCS.filter(o=>o&&o!=="Drawer"&&(!currentUser||o!==currentUser.name)).map(o=><option key={o} value={o} style={{background:"#0e0e1e"}}>{o}</option>)}
+                  </select>
+                  {v.fileLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>↳ {v.fileLog}</div>}
+                </div>
               </div>
             </div>
             {/* Quick-action row — big touch targets on mobile */}
