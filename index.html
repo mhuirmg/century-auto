@@ -675,8 +675,8 @@ function App(){
   const [fStatus,setFStatus]=useState("all");
   const [fDetail,setFDetail]=useState("all");
   const [fMR,setFMR]=useState("all");
-  const [fNoKey,setFNoKey]=useState(false);
-  const [fNoFile,setFNoFile]=useState(false);
+  const [fKeyLoc,setFKeyLoc]=useState("all");
+  const [fFileLoc,setFFileLoc]=useState("all");
   const [showAdd,setShowAdd]=useState(false);
   const [editV,setEditV]=useState(null);
   const [detailV,setDetailV]=useState(null);
@@ -780,7 +780,17 @@ function App(){
     });
   },[doAction, currentUser, vehicles]);
 
-  const togDetail=useCallback((id)=>{
+  const handleKeyLoc = useCallback((id, val) => {
+    if(val === "Customer (Test Drive)" || val === "Customer (Loaner)") {
+      const type = val === "Customer (Test Drive)" ? "Test Drive" : "Loaner";
+      const name = window.prompt("Enter customer name for " + type + ":");
+      if(name === null) return; // cancelled
+      const finalVal = name.trim() ? val + " - " + name.trim() : val;
+      qs(id, "keyLocation", finalVal);
+    } else {
+      qs(id, "keyLocation", val);
+    }
+  }, [qs]);
     doAction(async()=>{
       const s = stamp();
       const current = vehicles.find(x=>x.id===id);
@@ -798,15 +808,15 @@ function App(){
     if(fStatus!=="all")r=r.filter(v=>v.status===fStatus);
     if(fDetail!=="all")r=r.filter(v=>fDetail==="yes"?v.detailed:!v.detailed);
     if(fMR!=="all")r=r.filter(v=>v.makeReady===fMR);
-    if(fNoKey)r=r.filter(v=>!v.keyLocation);
-    if(fNoFile)r=r.filter(v=>!v.fileLocation);
+    if(fKeyLoc!=="all")r=r.filter(v=>fKeyLoc==="none"?!v.keyLocation:v.keyLocation===fKeyLoc||v.keyLocation.startsWith(fKeyLoc+" - "));
+    if(fFileLoc!=="all")r=r.filter(v=>fFileLoc==="none"?!v.fileLocation:v.fileLocation===fFileLoc);
     const q=search.toLowerCase();
     if(q)r=r.filter(v=>[v.stock,v.make,v.model,v.trim,v.color,v.vin,v.keyLocation,v.fileLocation].some(s=>(s && s.toLowerCase().includes(q))));
     return [...r].sort((a,b)=>{
       const av=(a[sortCol]||"").toString().toLowerCase(),bv=(b[sortCol]||"").toString().toLowerCase();
       return sortDir==="asc"?av.localeCompare(bv,undefined,{numeric:true}):bv.localeCompare(av,undefined,{numeric:true});
     });
-  },[vehicles,tab,fStatus,fDetail,fMR,fNoKey,fNoFile,search,sortCol,sortDir]);
+  },[vehicles,tab,fStatus,fDetail,fMR,fKeyLoc,fFileLoc,search,sortCol,sortDir]);
 
   const stats=useMemo(()=>({
     total:vehicles.length,used:vehicles.filter(v=>v.type==="used").length,
@@ -898,7 +908,7 @@ function App(){
         <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:isMobile&&!showFilters?0:8}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Search stock, VIN, make, model..." style={{flex:1,background:"#060610",border:"1px solid #1a1a2a",borderRadius:6,padding:"9px 12px",color:"#e0e0ff",fontFamily:"inherit"}}/>
           {isMobile&&<button onClick={()=>setShowFilters(f=>!f)} style={{background:showFilters?"#1e3a6e":"#0e0e1e",color:showFilters?"#60a0ff":"#6666aa",border:"1px solid #1a1a2e",borderRadius:6,padding:"9px 12px",fontFamily:"inherit",fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",fontSize:12}}>
-            {showFilters?"▲ Filters":"▼ Filters"}{(fStatus!=="all"||fDetail!=="all"||fMR!=="all"||fNoKey||fNoFile)&&<span style={{background:"#E53935",color:"#fff",borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:4}}> </span>}
+            {showFilters?"▲ Filters":"▼ Filters"}{(fStatus!=="all"||fDetail!=="all"||fMR!=="all"||fKeyLoc!=="all"||fFileLoc!=="all")&&<span style={{background:"#E53935",color:"#fff",borderRadius:10,padding:"0 5px",fontSize:9,marginLeft:4}}> </span>}
           </button>}
           {!isMobile&&<div style={{display:"flex",gap:3}}>
             {["table","cards"].map(v=><button key={v} onClick={()=>setView(v)} style={{background:view===v?"#1e1e3a":"transparent",color:view===v?"#e0e0ff":"#5555aa",border:"1px solid #1a1a2e",borderRadius:5,padding:"7px 10px",cursor:"pointer",fontSize:14}}>
@@ -924,12 +934,18 @@ function App(){
               <option value="all">All Make Ready</option>
               {allMRopts.map(o=><option key={o} value={o}>{o}</option>)}
             </select>
-            <label style={{color:fNoKey?"#ff6655":"#6666aa",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:700,userSelect:"none",padding:"6px 0"}}>
-              <input type="checkbox" checked={fNoKey} onChange={e=>setFNoKey(e.target.checked)} style={{accentColor:"#FF5252",width:16,height:16}}/>🔑 No Key
-            </label>
-            <label style={{color:fNoFile?"#ff6655":"#6666aa",cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontWeight:700,userSelect:"none",padding:"6px 0"}}>
-              <input type="checkbox" checked={fNoFile} onChange={e=>setFNoFile(e.target.checked)} style={{accentColor:"#FF5252",width:16,height:16}}/>📁 No File
-            </label>
+                        <select value={fKeyLoc} onChange={e=>setFKeyLoc(e.target.value)}
+              style={{background:"#060610",border:"1px solid "+(fKeyLoc!=="all"?"#2979FF":"#1a1a2a"),borderRadius:6,padding:"6px 10px",color:fKeyLoc!=="all"?"#60a0ff":"#e0e0ff",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
+              <option value="all">🔑 All Key Locations</option>
+              <option value="none">🔑 No Key Set</option>
+              {KEY_BOXES.filter(o=>o).map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
+            <select value={fFileLoc} onChange={e=>setFFileLoc(e.target.value)}
+              style={{background:"#060610",border:"1px solid "+(fFileLoc!=="all"?"#2979FF":"#1a1a2a"),borderRadius:6,padding:"6px 10px",color:fFileLoc!=="all"?"#60a0ff":"#e0e0ff",fontFamily:"inherit",fontSize:11,cursor:"pointer"}}>
+              <option value="all">📁 All File Locations</option>
+              <option value="none">📁 No File Set</option>
+              {FILE_LOCS.filter(o=>o).map(o=><option key={o} value={o}>{o}</option>)}
+            </select>
           </div>}
         </div>
       </div>
@@ -970,7 +986,7 @@ function App(){
                 <td style={{padding:"7px 6px",fontSize:11,color:"#9090cc",whiteSpace:"nowrap"}}>{v.color||"—"}</td>
                 {/* KEY LOCATION */}
                 <td style={{padding:"4px 6px"}}>
-                  <select value={v.keyLocation} onChange={e=>qs(v.id,"keyLocation",e.target.value)} style={selStyle(!!v.keyLocation)}>
+                  <select value={v.keyLocation} onChange={e=>handleKeyLoc(v.id,e.target.value)} style={selStyle(!!v.keyLocation)}>
                     {KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
                   </select>
                   {v.keyLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.keyLog}>↳ {v.keyLog}</div>}
@@ -1056,7 +1072,7 @@ function App(){
                 {/* Key Location */}
                 <div style={{background:"#060610",borderRadius:5,padding:"5px 8px"}}>
                   <div style={{fontSize:9,color:"#5566aa",fontWeight:800,letterSpacing:1,marginBottom:3}}>🔑 KEY LOCATION</div>
-                  <select value={v.keyLocation||""} onChange={e=>qs(v.id,"keyLocation",e.target.value)}
+                  <select value={v.keyLocation||""} onChange={e=>handleKeyLoc(v.id,e.target.value)}
                     style={{width:"100%",background:"transparent",border:"none",color:v.keyLocation?"#7799ff":"#ff6655",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer",padding:0,outline:"none"}}>
                     {KEY_BOXES.map(o=><option key={o} value={o} style={{background:"#0e0e1e"}}>{o||"— Not Set —"}</option>)}
                   </select>
