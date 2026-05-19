@@ -556,7 +556,7 @@ const soldSupa = {
   },
 };
 
-function SoldDeals({currentUser}) {
+function SoldDeals({currentUser, onBackToStock}) {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -569,15 +569,38 @@ function SoldDeals({currentUser}) {
   },[]);
 
   const updateFile = async (id, fileLocation) => {
-    const stamp = `${(currentUser && currentUser.name)||"?"} · ${new Date().toLocaleDateString("en-CA")} ${new Date().toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"})}`;
+    const stamp = (currentUser && currentUser.name)||"?" ;
+    const ts = new Date().toLocaleDateString("en-CA")+" "+new Date().toLocaleTimeString("en-CA",{hour:"2-digit",minute:"2-digit"});
     const prev = deals.find(d=>d.id===id);
-    const logEntry = stamp + " > " + fileLocation;
+    const logEntry = stamp + " · " + ts + " > " + fileLocation;
     const log = (prev && prev.file_log) ? prev.file_log + "\n" + logEntry : logEntry;
     try {
       await soldSupa.update(id, {file_location: fileLocation, file_log: log});
       setDeals(ds=>ds.map(d=>d.id===id?{...d,file_location:fileLocation,file_log:log}:d));
     } catch(e) { alert("Update failed: "+e.message); }
   };
+
+  const backToStock = async (deal) => {
+    if(!window.confirm("Move stock #"+deal.stock+" back to inventory? This will remove it from Sold Files.")) return;
+    try {
+      await fetch(SUPA_URL+"/rest/v1/vehicles?stock=eq."+encodeURIComponent(deal.stock), {
+        method:"PATCH", headers:{...HEADERS,"Prefer":"return=minimal"},
+        body:JSON.stringify({status:"available"})
+      });
+      await fetch(SUPA_URL+"/rest/v1/sold_deals?id=eq."+deal.id, {
+        method:"DELETE", headers:HEADERS
+      });
+      setDeals(ds=>ds.filter(d=>d.id!==deal.id));
+      if(onBackToStock) onBackToStock();
+    } catch(e) { alert("Failed to move back to stock: "+e.message); }
+  };
+
+  // File location: Drawer first, logged-in user second, then rest
+  const fileOpts = [
+    "Drawer",
+    ...(currentUser ? [currentUser.name] : []),
+    ...FILE_STAFF.filter(s=>s&&s!=="Drawer"&&(!currentUser||s!==currentUser.name))
+  ];
 
   const filtered = deals.filter(d=>{
     if(!search) return true;
@@ -586,7 +609,7 @@ function SoldDeals({currentUser}) {
   });
 
   const selStyle = (set) => ({
-    background: set ? "#0a1628" : "#1a0a0a",
+    background: set ? "#0a1628" : "#1a0808",
     border: "1px solid "+(set?"#2979FF":"#aa3333"),
     borderRadius:5, color: set?"#7aadff":"#ff8888",
     padding:"4px 6px", fontSize:12, minWidth:140, cursor:"pointer", fontFamily:"inherit"
@@ -597,23 +620,19 @@ function SoldDeals({currentUser}) {
 
   return (
     <div style={{padding:"12px 10px"}}>
-      {/* Search */}
       <div style={{marginBottom:12,display:"flex",gap:10,alignItems:"center"}}>
-        <input
-          value={search} onChange={e=>setSearch(e.target.value)}
+        <input value={search} onChange={e=>setSearch(e.target.value)}
           placeholder="🔍 Search stock, customer, make, model, sales rep..."
           style={{flex:1,background:"#0e0e1e",border:"1px solid #2a2a44",borderRadius:8,padding:"10px 14px",color:"#e0e0ff",fontSize:14,fontFamily:"inherit",outline:"none"}}
         />
         <div style={{fontSize:11,color:"#4444aa",whiteSpace:"nowrap"}}>{filtered.length} deals</div>
       </div>
-
-      {/* Table */}
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
           <thead>
             <tr style={{borderBottom:"2px solid #2a2a4a"}}>
-              {["POSTING","STOCK","CUSTOMER","YEAR / MAKE / MODEL","SALES REP","FILE LOCATION"].map(h=>(
-                <th key={h} style={{padding:"8px 8px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+              {["POSTING","STOCK","CUSTOMER","YEAR / MAKE / MODEL","SALES REP","FILE LOCATION",""].map((h,i)=>(
+                <th key={i} style={{padding:"8px 8px",fontSize:9,color:"#3333aa",fontWeight:800,letterSpacing:1,textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -621,26 +640,33 @@ function SoldDeals({currentUser}) {
             {filtered.map(d=>(
               <tr key={d.id} style={{borderBottom:"1px solid #111128"}}>
                 <td style={{padding:"6px 8px",color:"#8888cc",whiteSpace:"nowrap",fontSize:12}}>{formatPostingDate(d.posting_date)}</td>
-                <td style={{padding:"6px 8px",color:"#2979FF",fontWeight:700,whiteSpace:"nowrap"}}>{d.stock||"—"}</td>
+                <td style={{padding:"6px 8px",color:"#FFD700",fontWeight:700,whiteSpace:"nowrap"}}>{d.stock||"—"}</td>
                 <td style={{padding:"6px 8px",color:"#e0e0ff",whiteSpace:"nowrap"}}>{d.customer_name||"—"}</td>
                 <td style={{padding:"6px 8px",color:"#c0c0e0",whiteSpace:"nowrap"}}>{[d.year,d.make,d.model].filter(Boolean).join(" ")||"—"}</td>
                 <td style={{padding:"6px 8px",color:"#8888cc",whiteSpace:"nowrap",fontSize:12}}>{d.sales_rep||"—"}</td>
                 <td style={{padding:"4px 6px"}}>
-                  <select value={d.file_location||""} onChange={e=>updateFile(d.id,e.target.value)} style={selStyle(!!d.file_location)}>
+                  <select value={d.file_location||"Drawer"} onChange={e=>updateFile(d.id,e.target.value)} style={selStyle(!!d.file_location)}>
                     <option value="">— Not Set —</option>
-                    {FILE_STAFF.map(s=><option key={s} value={s}>{s}</option>)}
+                    {fileOpts.map(s=><option key={s} value={s}>{s}{currentUser&&s===currentUser.name?" (me)":""}</option>)}
                   </select>
-                  {d.file_log && <div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:180}} title={d.file_log}>↳ {d.file_log.split("\n").pop()}</div>}
+                  {d.file_log&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:180}} title={d.file_log}>↳ {d.file_log.split("\n").pop()}</div>}
+                </td>
+                <td style={{padding:"4px 8px",whiteSpace:"nowrap"}}>
+                  <button onClick={()=>backToStock(d)}
+                    style={{background:"#0a1a0a",border:"1px solid #1a4a1a",borderRadius:5,color:"#44cc44",padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                    ↩ Back to Stock
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        {filtered.length===0 && <div style={{padding:40,textAlign:"center",color:"#333366"}}>No deals found</div>}
+        {filtered.length===0&&<div style={{padding:40,textAlign:"center",color:"#333366"}}>No deals found</div>}
       </div>
     </div>
   );
 }
+
 
 function App(){
   const [vehicles,setVehicles,loading,dbError,reloadVehicles]=useVehicles();
@@ -853,7 +879,7 @@ function App(){
 
     <div style={{maxWidth:1700,margin:"0 auto",padding:isMobile?"10px 10px":"12px 20px"}}>
 
-      {mainView==="sold" ? <SoldDeals currentUser={currentUser}/> : <>
+      {mainView==="sold" ? <SoldDeals currentUser={currentUser} onBackToStock={()=>setMainView("inventory")}/> : <>
       {/* STATS */}
       <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(4,1fr)":"repeat(7,1fr)",gap:isMobile?6:8,marginBottom:isMobile?10:12}}>
         {[
