@@ -38,11 +38,11 @@ const fromDB = r => ({
 });
 // Map camelCase → DB snake_case (only updatable fields)
 const toDB = v => ({
-  vin: v.vin, stock: v.stock, year: v.year, make: v.make, model: v.model,
-  trim: v.trim, color: v.color, odometer: v.odometer, make_ready: v.makeReady,
+  vin: v.vin, stock: v.stock, year: v.year?parseInt(v.year)||null:null, make: v.make, model: v.model,
+  trim: v.trim, color: v.color, odometer: v.odometer?parseInt(v.odometer)||0:0, make_ready: v.makeReady,
   type: v.type, status: v.status, key_location: v.keyLocation, key_count: v.keyCount,
   file_location: v.fileLocation, detailed: v.detailed, key_log: v.keyLog,
-  file_log: v.fileLog, detail_log: v.detailLog, make_ready_log: v.makeReadyLog,
+  file_log: v.fileLog, detail_log: v.detailLog, make_ready_log: v.eLog, detail_log: v.detailLog, make_ready_log: v.makeReadyLog,
   added_by: v.addedBy, added_at: v.addedAt,
 });
 
@@ -65,7 +65,12 @@ const supa = {
       color:"color", year:"year", odometer:"odometer", type:"type", vin:"vin",
       stock:"stock", addedBy:"added_by", addedAt:"added_at" };
     const body = {};
-    for(const [k,v] of Object.entries(fields)) body[map[k]||k] = v;
+    for(const [k,v] of Object.entries(fields)) {
+      const dbKey = map[k]||k;
+      if(dbKey==="year") body[dbKey] = v?parseInt(v)||null:null;
+      else if(dbKey==="odometer") body[dbKey] = v?parseInt(v)||0:0;
+      else body[dbKey] = v;
+    }
     const r = await fetch(`${SUPA_URL}/rest/v1/vehicles?id=eq.${id}`, { method:"PATCH", headers: HEADERS, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(await r.text());
   },
@@ -473,7 +478,7 @@ const inp={width:"100%",background:"#0a0a18",border:"1px solid #2a2a44",borderRa
 const lbl={display:"block",fontSize:10,color:"#6666aa",marginBottom:3,fontWeight:800,letterSpacing:1};
 const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
 
-function VehicleForm({vehicle,onSave,onClose}){
+function VehicleForm({vehicle,onSave,onClose,currentUser}){
   const [form,setForm]=useState(vehicle||{stock:"",year:new Date().getFullYear(),make:"",model:"",trim:"",color:"",vin:"",odometer:"",keyLocation:"",fileLocation:"",detailed:false,makeReady:"",status:"available",type:"used",addedBy:"",addedAt:new Date().toISOString().slice(0,10)});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const mrOpts=MR_OPTS;
@@ -501,7 +506,10 @@ function VehicleForm({vehicle,onSave,onClose}){
       <div style={g2}>
         <div><label style={lbl}>🔑 KEY LOCATION</label><select style={inp} value={form.keyLocation} onChange={e=>set("keyLocation",e.target.value)}>{KEY_BOXES.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
         <div><label style={lbl}>🔑 NUMBER OF KEYS</label><select style={inp} value={form.keyCount||'2+'} onChange={e=>set("keyCount",e.target.value)}><option value="1">1</option><option value="2+">2+</option></select></div>
-        <div><label style={lbl}>📁 FILE LOCATION</label><select style={inp} value={form.fileLocation} onChange={e=>set("fileLocation",e.target.value)}>{FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
+        <div><label style={lbl}>📁 FILE LOCATION</label><select style={inp} value={form.fileLocation} onChange={e=>set("fileLocation",e.target.value)}><option value="">— Not Set —</option>
+                    <option value="Drawer">Drawer</option>
+                    {currentUser&&<option value={currentUser.name}>{currentUser.name} (me)</option>}
+                    {FILE_LOCS.filter(o=>o&&o!=="Drawer"&&(!currentUser||o!==currentUser.name)).map(o=><option key={o} value={o}>{o}</option>)}</select></div>
       </div>
       <div style={g2}>
         <div><label style={lbl}>MAKE READY</label><select style={inp} value={form.makeReady} onChange={e=>set("makeReady",e.target.value)}>{MR_OPTS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}</select></div>
@@ -919,7 +927,10 @@ function App(){
                 {/* FILE LOCATION */}
                 <td style={{padding:"4px 6px"}}>
                   <select value={v.fileLocation} onChange={e=>qs(v.id,"fileLocation",e.target.value)} style={selStyle(!!v.fileLocation)}>
-                    {FILE_LOCS.map(o=><option key={o} value={o}>{o||"— Not Set —"}</option>)}
+                    <option value="">— Not Set —</option>
+                    <option value="Drawer">Drawer</option>
+                    {currentUser&&<option value={currentUser.name}>{currentUser.name} (me)</option>}
+                    {FILE_LOCS.filter(o=>o&&o!=="Drawer"&&(!currentUser||o!==currentUser.name)).map(o=><option key={o} value={o}>{o}</option>)}
                   </select>
                   {v.fileLog&&<div style={{fontSize:9,color:"#3344aa",marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:150}} title={v.fileLog}>↳ {v.fileLog}</div>}
                 </td>
@@ -1025,7 +1036,7 @@ function App(){
 
 
         <Modal open={showAdd} onClose={()=>{setShowAdd(false);setEditV(null);}}>
-      <VehicleForm vehicle={editV} onSave={save} onClose={()=>{setShowAdd(false);setEditV(null);}}/>
+      <VehicleForm vehicle={editV} onSave={save} onClose={()=>{setShowAdd(false);setEditV(null);}} currentUser={currentUser}/>
     </Modal>
 
     <Modal open={!!detailV&&!showAdd} onClose={()=>setDetailV(null)}>
