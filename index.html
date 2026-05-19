@@ -38,8 +38,8 @@ const fromDB = r => ({
 });
 // Map camelCase → DB snake_case (only updatable fields)
 const toDB = v => ({
-  vin: v.vin, stock: v.stock, year: v.year?parseInt(v.year)||null:null, make: v.make, model: v.model,
-  trim: v.trim, color: v.color, odometer: v.odometer?parseInt(v.odometer)||0:0, make_ready: v.makeReady,
+  vin: v.vin, stock: v.stock, year: v.year&&v.year!==""?parseInt(v.year):null, make: v.make, model: v.model,
+  trim: v.trim, color: v.color, odometer: v.odometer&&v.odometer!==""?parseInt(v.odometer):0, make_ready: v.makeReady,
   type: v.type, status: v.status, key_location: v.keyLocation, key_count: v.keyCount,
   file_location: v.fileLocation, detailed: v.detailed, key_log: v.keyLog,
   file_log: v.fileLog, detail_log: v.detailLog, make_ready_log: v.eLog, detail_log: v.detailLog, make_ready_log: v.makeReadyLog,
@@ -67,8 +67,8 @@ const supa = {
     const body = {};
     for(const [k,v] of Object.entries(fields)) {
       const dbKey = map[k]||k;
-      if(dbKey==="year") body[dbKey] = v?parseInt(v)||null:null;
-      else if(dbKey==="odometer") body[dbKey] = v?parseInt(v)||0:0;
+      if(dbKey==="year") body[dbKey] = v&&v!==""?parseInt(v):null;
+      else if(dbKey==="odometer") body[dbKey] = v&&v!==""?parseInt(v):0;
       else body[dbKey] = v;
     }
     const r = await fetch(`${SUPA_URL}/rest/v1/vehicles?id=eq.${id}`, { method:"PATCH", headers: HEADERS, body: JSON.stringify(body) });
@@ -479,7 +479,7 @@ const lbl={display:"block",fontSize:10,color:"#6666aa",marginBottom:3,fontWeight
 const g2={display:"grid",gridTemplateColumns:"1fr 1fr",gap:12};
 
 function VehicleForm({vehicle,onSave,onClose,currentUser}){
-  const [form,setForm]=useState(vehicle||{stock:"",year:new Date().getFullYear(),make:"",model:"",trim:"",color:"",vin:"",odometer:"",keyLocation:"",fileLocation:"",detailed:false,makeReady:"",status:"available",type:"used",addedBy:"",addedAt:new Date().toISOString().slice(0,10)});
+  const [form,setForm]=useState(vehicle||{stock:"",year:new Date().getFullYear(),make:"",model:"",trim:"",color:"",vin:"",odometer:0,keyLocation:"",fileLocation:"Drawer",detailed:false,makeReady:"",status:"available",type:"used",addedBy:"",addedAt:new Date().toISOString().slice(0,10)});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const mrOpts=MR_OPTS;
   const submit=()=>{if(!form.stock||!form.make||!form.model)return alert("Stock #, Make, Model required");onSave(form);};
