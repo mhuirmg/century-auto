@@ -718,9 +718,41 @@ function App(){
       const updates = {[f]:val, ...(logField?{[logField]:s}:{})};
       setVehicles(v=>v.map(x=>x.id===id?{...x,...updates}:x));
       setDetailV(d=>d&&d.id===id?{...d,...updates}:d);
-      try { await supa.update(id, updates); } catch(e) { alert("Update failed: "+e.message); }
+      try {
+        await supa.update(id, updates);
+        if(f==="status" && val==="sold & delivered") {
+          const v = vehicles.find(x=>x.id===id);
+          if(v) {
+            const today = new Date();
+            const mm = (today.getMonth()+1).toString().padStart(2,"0");
+            const dd = today.getDate().toString().padStart(2,"0");
+            const yyyy = today.getFullYear();
+            const postingDate = mm+"/"+dd+"/"+yyyy;
+            await fetch(SUPA_URL+"/rest/v1/sold_deals", {
+              method:"POST",
+              headers:{...HEADERS,"Prefer":"return=minimal"},
+              body:JSON.stringify({
+                stock: v.stock,
+                year: v.year,
+                make: v.make,
+                model: v.model,
+                trim: v.trim||"",
+                vin: v.vin||"",
+                sales_rep: (currentUser&&currentUser.name)||"",
+                posting_date: postingDate,
+                contract_date: postingDate,
+                customer_name: "",
+                deal_type: v.type==="new"?"New":"Used",
+                sale_type: "Retail",
+                file_location: "Drawer",
+                file_log: ""
+              })
+            });
+          }
+        }
+      } catch(e) { alert("Update failed: "+e.message); }
     });
-  },[doAction, currentUser]);
+  },[doAction, currentUser, vehicles]);
 
   const togDetail=useCallback((id)=>{
     doAction(async()=>{
