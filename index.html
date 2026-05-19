@@ -960,14 +960,14 @@ function App(){
             </thead>
             <tbody>
               {filtered.length===0&&<tr><td colSpan={13} style={{textAlign:"center",padding:40,color:"#333388",fontSize:13}}>No vehicles found</td></tr>}
-              {filtered.map(v=><tr key={v.id} style={{borderBottom:"1px solid #0e0e1c",cursor:"pointer"}}>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#6677ee",fontWeight:500,whiteSpace:"nowrap"}}>{v.stock}</td>
+              {filtered.map(v=><tr key={v.id} style={{borderBottom:"1px solid #0e0e1c"}}>
+                <td style={{padding:"7px 8px",fontFamily:"'JetBrains Mono',monospace",fontSize:11,color:"#6677ee",fontWeight:500,whiteSpace:"nowrap"}}>{v.stock}</td>
                 <td style={{padding:"7px 5px"}}><Bdg label={v.type==="new"?"N":"U"} bg={v.type==="new"?"#1a2060":"#0a3020"} small/></td>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 5px",fontSize:12,color:"#7777aa"}}>{v.year}</td>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:12,fontWeight:600,color:"#c0c0e0",whiteSpace:"nowrap"}}>{v.make}</td>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:12,color:"#e0e0ff",whiteSpace:"nowrap"}}>{v.model}</td>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#8888bb",whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{v.trim}</td>
-                <td onClick={()=>setDetailV(v)} style={{padding:"7px 6px",fontSize:11,color:"#9090cc",whiteSpace:"nowrap"}}>{v.color||"—"}</td>
+                <td style={{padding:"7px 5px",fontSize:12,color:"#7777aa"}}>{v.year}</td>
+                <td style={{padding:"7px 6px",fontSize:12,fontWeight:600,color:"#c0c0e0",whiteSpace:"nowrap"}}>{v.make}</td>
+                <td style={{padding:"7px 6px",fontSize:12,color:"#e0e0ff",whiteSpace:"nowrap"}}>{v.model}</td>
+                <td style={{padding:"7px 6px",fontSize:11,color:"#8888bb",whiteSpace:"nowrap",maxWidth:120,overflow:"hidden",textOverflow:"ellipsis"}}>{v.trim}</td>
+                <td style={{padding:"7px 6px",fontSize:11,color:"#9090cc",whiteSpace:"nowrap"}}>{v.color||"—"}</td>
                 {/* KEY LOCATION */}
                 <td style={{padding:"4px 6px"}}>
                   <select value={v.keyLocation} onChange={e=>qs(v.id,"keyLocation",e.target.value)} style={selStyle(!!v.keyLocation)}>
@@ -1039,7 +1039,7 @@ function App(){
           <div key={v.id} style={{background:"#0a0a16",border:"1px solid #1a1a2e",borderRadius:10,overflow:"hidden",position:"relative"}}>
             <div style={{height:3,background:STATUS_COLORS[v.status]||"#333"}}/>
             {/* Tappable header */}
-            <div onClick={()=>setDetailV(v)} style={{padding:"10px 13px 8px",cursor:"pointer"}}>
+            <div style={{padding:"10px 13px 8px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div style={{minWidth:0}}>
                   <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:isMobile?15:10,fontWeight:isMobile?800:600,color:isMobile?"#FFD700":"#5566dd",letterSpacing:isMobile?1:0}}>#{v.stock}</div>
